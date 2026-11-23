@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_stack" name="shell-type"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{width:100vw;margin:0;padding:0;}body{overscroll-behavior:none;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "on-primary": "#ffffff", "background": "#faf9f5", "surface-container": "#efeeea", "on-primary-container": "#a1c5b5", "outline": "#717974", "error-container": "#ffdad6", "surface": "#faf9f5", "on-secondary": "#ffffff", "inverse-on-surface": "#f2f1ed", "on-surface": "#1b1c1a", "tertiary-container": "#3f5048", "on-secondary-container": "#56656e", "surface-container-highest": "#e3e2df", "surface-tint": "#446557", "inverse-primary": "#aacfbe", "surface-container-high": "#e9e8e4", "secondary-fixed-dim": "#bac9d3", "on-background": "#1b1c1a", "on-tertiary-fixed-variant": "#3a4a42", "on-tertiary-fixed": "#0f1f18", "on-tertiary": "#ffffff", "on-error-container": "#93000a", "primary-fixed-dim": "#aacfbe", "primary-fixed": "#c6ebd9", "inverse-surface": "#2f312e", "on-primary-fixed": "#002116", "surface-bright": "#faf9f5", "on-surface-variant": "#414845", "primary": "#1b3c30", "on-secondary-fixed-variant": "#3b4951", "tertiary-fixed": "#d4e7dc", "on-primary-fixed-variant": "#2c4d40", "tertiary-fixed-dim": "#b8cbc0", "surface-container-lowest": "#ffffff", "surface-dim": "#dbdad6", "secondary": "#526069", "secondary-container": "#d3e2ec", "outline-variant": "#c1c8c3", "surface-container-low": "#f4f4f0", "secondary-fixed": "#d6e5ef", "on-secondary-fixed": "#0f1d25", "tertiary": "#293932", "on-error": "#ffffff", "surface-variant": "#e3e2df", "error": "#ba1a1a", "primary-container": "#325346", "on-tertiary-container": "#afc2b7" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "space-xl": "1.5rem", "gutter": "0.75rem", "space-lg": "1rem", "space-xs": "0.25rem", "space-md": "0.75rem", "space-sm": "0.5rem", "margin": "1rem" }, "fontFamily": { "label-sm": ["Plus Jakarta Sans"], "label-lg": ["Plus Jakarta Sans"], "display-lg": ["Newsreader"], "body-sm": ["Plus Jakarta Sans"], "body-md": ["Plus Jakarta Sans"], "headline-md": ["Newsreader"], "body-lg": ["Newsreader"], "display-md": ["Newsreader"], "label-md": ["Plus Jakarta Sans"], "headline-lg": ["Newsreader"] }, "fontSize": { "label-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0.04em", "fontWeight": "600" }], "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }], "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "400" }], "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }], "body-md": ["15px", { "lineHeight": "22px", "fontWeight": "400" }], "headline-md": ["18px", { "lineHeight": "24px", "fontWeight": "500" }], "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }], "display-md": ["26px", { "lineHeight": "34px", "letterSpacing": "-0.015em", "fontWeight": "400" }], "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500" }], "headline-lg": ["22px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "500" }] } } } };</script></head><body class="bg-surface font-body-md text-body-md text-on-surface flex flex-col min-h-screen selection:bg-primary-fixed selection:text-on-primary-fixed"><header class="fixed top-0 w-full z-50 pt-safe bg-surface/85 backdrop-blur-xl shadow-[0_1px_8px_rgba(50,83,70,0.04)]"><div class="h-16 px-margin flex items-center justify-between gap-space-sm"><div class="flex items-center gap-space-xs"><button aria-label="Go back" class="w-11 h-11 -ml-space-xs flex items-center justify-center rounded-full text-secondary hover:text-primary active:bg-surface-container-high transition-colors" onclick="history.back()" type="button"><span class="material-symbols-outlined text-[24px]">arrow_back</span></button><h1 class="font-headline-lg text-headline-lg text-primary tracking-tight font-medium">Library &amp; Controls</h1></div><div class="flex items-center gap-space-xs"><button aria-label="Search history and downloads" class="w-11 h-11 flex items-center justify-center rounded-full text-secondary hover:text-primary active:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[22px]">search</span></button><button aria-label="More actions" class="w-11 h-11 flex items-center justify-center rounded-full text-secondary hover:text-primary active:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[22px]">tune</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center ml-space-xs"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 bg-surface px-margin pb-safe"><div class="flex flex-col w-full pb-10 space-y-space-lg">
+<!-- Quick Toggle & Modes Strip (Tactile Cards) -->
+<section class="flex flex-col space-y-space-sm pt-space-xs">
+<div class="flex items-center justify-between px-space-xs">
+<span class="font-label-md text-label-md text-secondary uppercase tracking-wider">Browser Environment</span>
+<span class="font-label-sm text-label-sm text-surface-tint flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-surface-tint"></span> Active Session
+      </span>
+</div>
+<!-- Quick Mode Dual Bento -->
+<div class="grid grid-cols-2 gap-space-sm">
+<!-- Desktop Site Toggle Card -->
+<div class="bg-surface-container-low rounded-xl p-space-md flex flex-col justify-between transition-all duration-200 cursor-pointer shadow-sm active:scale-[0.98]" id="desktop-toggle-card">
+<div class="flex items-start justify-between">
+<div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[22px]">desktop_windows</span>
+</div>
+<!-- Tactile Switch UI -->
+<button aria-label="Toggle Desktop Mode" class="w-11 h-6 bg-surface-container-highest rounded-full p-0.5 flex items-center transition-colors" id="desktop-switch" type="button">
+<div class="w-5 h-5 rounded-full bg-surface shadow-sm transform transition-transform" id="desktop-knob"></div>
+</button>
+</div>
+<div class="mt-space-md">
+<h2 class="font-headline-md text-headline-md text-on-surface">Desktop View</h2>
+<p class="font-body-sm text-body-sm text-secondary mt-0.5" id="desktop-status-text">Mobile viewport (390px)</p>
+</div>
+</div>
+<!-- Theme Switcher Card -->
+<div class="bg-surface-container-low rounded-xl p-space-md flex flex-col justify-between shadow-sm">
+<div class="flex items-center justify-between">
+<div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[22px]" id="theme-icon">light_mode</span>
+</div>
+<div class="flex items-center gap-1 bg-surface-container p-1 rounded-full">
+<button class="w-6 h-6 rounded-full bg-surface flex items-center justify-center shadow-xs text-primary transition-all" id="theme-btn-light" type="button">
+<span class="material-symbols-outlined text-[14px]">wb_sunny</span>
+</button>
+<button class="w-6 h-6 rounded-full text-secondary flex items-center justify-center transition-all" id="theme-btn-dark" type="button">
+<span class="material-symbols-outlined text-[14px]">dark_mode</span>
+</button>
+</div>
+</div>
+<div class="mt-space-md">
+<h2 class="font-headline-md text-headline-md text-on-surface">Serene Theme</h2>
+<p class="font-body-sm text-body-sm text-secondary mt-0.5" id="theme-status-text">Warm unbleached paper</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Segmented Navigation Pills -->
+<section class="flex items-center gap-space-xs overflow-x-auto py-space-xs scrollbar-none">
+<button class="tab-pill active flex items-center gap-space-xs px-space-md py-2 rounded-full bg-primary text-on-primary font-label-md text-label-md transition-all shadow-xs shrink-0" data-target="all" type="button">
+<span>All Activity</span>
+</button>
+<button class="tab-pill flex items-center gap-space-xs px-space-md py-2 rounded-full bg-surface-container-low text-on-surface font-label-md text-label-md transition-all shrink-0 active:bg-surface-container" data-target="history" type="button">
+<span>History</span>
+<span class="px-1.5 py-0.2 rounded-full bg-surface-container-highest text-secondary text-[11px] font-semibold">14</span>
+</button>
+<button class="tab-pill flex items-center gap-space-xs px-space-md py-2 rounded-full bg-surface-container-low text-on-surface font-label-md text-label-md transition-all shrink-0 active:bg-surface-container" data-target="downloads" type="button">
+<span>Downloads</span>
+<span class="px-1.5 py-0.2 rounded-full bg-primary-container text-on-primary-container text-[11px] font-semibold">3</span>
+</button>
+</section>
+<!-- Downloads Section -->
+<section class="flex flex-col space-y-space-sm" id="section-downloads">
+<!-- Header -->
+<div class="flex items-center justify-between px-space-xs">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-surface-tint text-[20px]">download_for_offline</span>
+<h2 class="font-headline-lg text-headline-lg text-primary">Downloads</h2>
+</div>
+<div class="flex items-center gap-space-sm">
+<span class="font-label-sm text-label-sm text-secondary">1.4 GB used</span>
+<button class="font-label-md text-label-md text-surface-tint hover:underline active:opacity-75" type="button">Clear Done</button>
+</div>
+</div>
+<div class="flex flex-col space-y-space-xs">
+<!-- Item 1: Active in-progress Download -->
+<div class="bg-surface-container-low rounded-xl p-space-md shadow-xs flex flex-col space-y-space-sm transition-all">
+<div class="flex items-start justify-between gap-space-sm">
+<div class="flex items-start gap-space-sm min-w-0">
+<div class="w-10 h-10 rounded-lg bg-secondary-container text-on-secondary-container flex items-center justify-center shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[20px]">folder_zip</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-on-surface font-medium truncate">Android-15-Kernel-Source.tar.gz</span>
+<div class="flex items-center gap-space-xs font-body-sm text-body-sm text-secondary mt-0.5">
+<span class="text-surface-tint font-medium">420 MB / 850 MB</span>
+<span>•</span>
+<span>12.4 MB/s</span>
+</div>
+</div>
+</div>
+<!-- Controls -->
+<div class="flex items-center gap-1 shrink-0">
+<button aria-label="Pause download" class="w-9 h-9 rounded-full flex items-center justify-center text-primary bg-surface-container hover:bg-surface-container-high transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">pause</span>
+</button>
+<button aria-label="Cancel download" class="w-9 h-9 rounded-full flex items-center justify-center text-secondary hover:text-error hover:bg-error-container/30 transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+</div>
+<!-- Progress Bar (Literary sage styling) -->
+<div class="w-full flex flex-col space-y-1">
+<div class="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary-container rounded-full transition-all duration-300" style="width: 49%;"></div>
+</div>
+<div class="flex justify-between items-center text-[11px] font-label-sm text-secondary">
+<span>49% completed</span>
+<span>~34 seconds remaining</span>
+</div>
+</div>
+</div>
+<!-- Item 2: Completed PDF Document -->
+<div class="bg-surface-container-low rounded-xl p-space-md shadow-xs flex items-center justify-between gap-space-sm transition-all hover:bg-surface-container">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-10 h-10 rounded-lg bg-surface-container-highest text-primary flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[22px]">picture_as_pdf</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-on-surface font-medium truncate">Ritam-Whitepaper-v2.pdf</span>
+<div class="flex items-center gap-space-xs font-body-sm text-body-sm text-secondary">
+<span class="inline-block px-1 rounded bg-surface-container text-[10px] uppercase font-bold tracking-wider">PDF</span>
+<span>14.2 MB</span>
+<span>•</span>
+<span>2 hours ago</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-1 shrink-0">
+<button aria-label="Share" class="w-9 h-9 rounded-full flex items-center justify-center text-secondary hover:text-primary active:bg-surface-container-high transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">share</span>
+</button>
+<button aria-label="Actions" class="w-9 h-9 rounded-full flex items-center justify-center text-secondary hover:text-primary active:bg-surface-container-high transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Item 3: Media Audio Download -->
+<div class="bg-surface-container-low rounded-xl p-space-md shadow-xs flex items-center justify-between gap-space-sm transition-all hover:bg-surface-container">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-10 h-10 rounded-lg bg-tertiary-fixed text-on-tertiary-fixed flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]">graphic_eq</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-on-surface font-medium truncate">ambient-forest-audio.flac</span>
+<div class="flex items-center gap-space-xs font-body-sm text-body-sm text-secondary">
+<span class="inline-block px-1 rounded bg-surface-container text-[10px] uppercase font-bold tracking-wider">FLAC</span>
+<span>38 MB</span>
+<span>•</span>
+<span>Yesterday</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-1 shrink-0">
+<button aria-label="Play file" class="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center text-primary hover:bg-surface-container-highest transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">play_arrow</span>
+</button>
+<button aria-label="Actions" class="w-9 h-9 rounded-full flex items-center justify-center text-secondary hover:text-primary active:bg-surface-container-high transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Browsing History Section -->
+<section class="flex flex-col space-y-space-md" id="section-history">
+<!-- Header with Inline Search -->
+<div class="flex flex-col space-y-space-sm">
+<div class="flex items-center justify-between px-space-xs">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-surface-tint text-[20px]">history</span>
+<h2 class="font-headline-lg text-headline-lg text-primary">Browsing History</h2>
+</div>
+<button class="font-label-md text-label-md text-error hover:underline active:opacity-75" type="button">Clear All</button>
+</div>
+<!-- Quick Search Input -->
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-secondary text-[20px]">search</span>
+<input class="w-full h-11 pl-10 pr-4 rounded-xl bg-surface-container-low text-on-surface font-body-md text-body-md placeholder:text-secondary focus:outline-none focus:bg-surface-container-lowest focus:ring-0 transition-all shadow-xs" placeholder="Search history &amp; domains..." type="text"/>
+</div>
+</div>
+<!-- History Group: Today - Afternoon -->
+<div class="flex flex-col space-y-space-xs">
+<div class="px-space-xs py-1">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-secondary">Today — Afternoon</span>
+</div>
+<div class="bg-surface-container-low rounded-xl overflow-hidden shadow-xs divide-y-0">
+<!-- History Item 1 -->
+<div class="p-space-md flex items-center justify-between gap-space-sm hover:bg-surface-container-high transition-colors">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-9 h-9 rounded-lg bg-surface flex items-center justify-center text-primary shadow-xs shrink-0">
+<span class="material-symbols-outlined text-[18px]">draw</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-on-surface truncate font-medium">Stitch — Design with AI Systems</span>
+<div class="flex items-center gap-space-xs font-body-sm text-body-sm text-secondary">
+<span class="truncate">stitch.google.com</span>
+<span>•</span>
+<span>2:14 PM</span>
+</div>
+</div>
+</div>
+<button aria-label="Remove item" class="w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:text-on-surface active:bg-surface transition-colors shrink-0" type="button">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+</div>
+<!-- History Item 2 -->
+<div class="p-space-md flex items-center justify-between gap-space-sm hover:bg-surface-container-high transition-colors">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-9 h-9 rounded-lg bg-surface flex items-center justify-center text-surface-tint shadow-xs shrink-0">
+<span class="material-symbols-outlined text-[18px]">terminal</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-on-surface truncate font-medium">Google AI Studio — Prompt Playground</span>
+<div class="flex items-center gap-space-xs font-body-sm text-body-sm text-secondary">
+<span class="truncate">aistudio.google.com</span>
+<span>•</span>
+<span>1:40 PM</span>
+</div>
+</div>
+</div>
+<button aria-label="Remove item" class="w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:text-on-surface active:bg-surface transition-colors shrink-0" type="button">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+</div>
+<!-- History Item 3 -->
+<div class="p-space-md flex items-center justify-between gap-space-sm hover:bg-surface-container-high transition-colors">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-9 h-9 rounded-lg bg-surface flex items-center justify-center text-secondary shadow-xs shrink-0">
+<span class="material-symbols-outlined text-[18px]">menu_book</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-on-surface truncate font-medium">Rust Async Book &amp; Tokio Runtime</span>
+<div class="flex items-center gap-space-xs font-body-sm text-body-sm text-secondary">
+<span class="truncate">tokio.rs/docs</span>
+<span>•</span>
+<span>11:20 AM</span>
+</div>
+</div>
+</div>
+<button aria-label="Remove item" class="w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:text-on-surface active:bg-surface transition-colors shrink-0" type="button">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+</div>
+</div>
+</div>
+<!-- History Group: Yesterday -->
+<div class="flex flex-col space-y-space-xs">
+<div class="px-space-xs py-1">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-secondary">Yesterday</span>
+</div>
+<div class="bg-surface-container-low rounded-xl overflow-hidden shadow-xs">
+<!-- History Item 4 -->
+<div class="p-space-md flex items-center justify-between gap-space-sm hover:bg-surface-container-high transition-colors">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-9 h-9 rounded-lg bg-surface flex items-center justify-center text-on-surface shadow-xs shrink-0">
+<span class="material-symbols-outlined text-[18px]">code</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-on-surface truncate font-medium">GitHub — WebGPU Shaders Gallery</span>
+<div class="flex items-center gap-space-xs font-body-sm text-body-sm text-secondary">
+<span class="truncate">github.com/webgpu</span>
+<span>•</span>
+<span>5:12 PM</span>
+</div>
+</div>
+</div>
+<button aria-label="Remove item" class="w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:text-on-surface active:bg-surface transition-colors shrink-0" type="button">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+</div>
+<!-- History Item 5 -->
+<div class="p-space-md flex items-center justify-between gap-space-sm hover:bg-surface-container-high transition-colors">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-9 h-9 rounded-lg bg-surface flex items-center justify-center text-primary-container shadow-xs shrink-0">
+<span class="material-symbols-outlined text-[18px]">layers</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-on-surface truncate font-medium">MDN Web Docs — View Transitions API</span>
+<div class="flex items-center gap-space-xs font-body-sm text-body-sm text-secondary">
+<span class="truncate">developer.mozilla.org</span>
+<span>•</span>
+<span>3:30 PM</span>
+</div>
+</div>
+</div>
+<button aria-label="Remove item" class="w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:text-on-surface active:bg-surface transition-colors shrink-0" type="button">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Sticky Clean/Privacy Ergonomic Bottom Tray -->
+<div class="sticky bottom-3 z-30 pt-2">
+<div class="bg-surface-container-high/90 backdrop-blur-md p-space-xs rounded-xl flex items-center justify-between gap-space-xs shadow-md">
+<button class="flex-1 h-11 px-space-md rounded-lg bg-surface flex items-center justify-center gap-space-xs text-error font-label-md text-label-md shadow-xs active:bg-surface-container-highest transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">delete_sweep</span>
+<span>Clear Browsing Data</span>
+</button>
+<button aria-label="Privacy Filter &amp; Search" class="w-11 h-11 rounded-lg bg-surface flex items-center justify-center text-secondary hover:text-primary active:bg-surface-container-highest transition-colors shadow-xs" type="button">
+<span class="material-symbols-outlined text-[20px]">filter_list</span>
+</button>
+</div>
+</div>
+</div>
+<script>
+  // Desktop site switcher interaction
+  const desktopCard = document.getElementById('desktop-toggle-card');
+  const desktopSwitch = document.getElementById('desktop-switch');
+  const desktopKnob = document.getElementById('desktop-knob');
+  const desktopStatus = document.getElementById('desktop-status-text');
+  let isDesktop = false;
+
+  function toggleDesktop() {
+    isDesktop = !isDesktop;
+    if (isDesktop) {
+      desktopSwitch.classList.remove('bg-surface-container-highest');
+      desktopSwitch.classList.add('bg-primary');
+      desktopKnob.classList.add('translate-x-5');
+      desktopStatus.textContent = 'Desktop 1920px Requested';
+      desktopStatus.classList.add('text-primary');
+      desktopStatus.classList.remove('text-secondary');
+    } else {
+      desktopSwitch.classList.remove('bg-primary');
+      desktopSwitch.classList.add('bg-surface-container-highest');
+      desktopKnob.classList.remove('translate-x-5');
+      desktopStatus.textContent = 'Mobile viewport (390px)';
+      desktopStatus.classList.remove('text-primary');
+      desktopStatus.classList.add('text-secondary');
+    }
+  }
+
+  desktopCard.addEventListener('click', toggleDesktop);
+
+  // Theme switcher micro-interactions
+  const btnLight = document.getElementById('theme-btn-light');
+  const btnDark = document.getElementById('theme-btn-dark');
+  const themeStatus = document.getElementById('theme-status-text');
+  const themeIcon = document.getElementById('theme-icon');
+
+  btnDark.addEventListener('click', (e) => {
+    e.stopPropagation();
+    btnDark.classList.add('bg-surface', 'shadow-xs', 'text-primary');
+    btnDark.classList.remove('text-secondary');
+    btnLight.classList.remove('bg-surface', 'shadow-xs', 'text-primary');
+    btnLight.classList.add('text-secondary');
+    themeStatus.textContent = 'Onyx Dark Active';
+    themeIcon.textContent = 'dark_mode';
+  });
+
+  btnLight.addEventListener('click', (e) => {
+    e.stopPropagation();
+    btnLight.classList.add('bg-surface', 'shadow-xs', 'text-primary');
+    btnLight.classList.remove('text-secondary');
+    btnDark.classList.remove('bg-surface', 'shadow-xs', 'text-primary');
+    btnDark.classList.add('text-secondary');
+    themeStatus.textContent = 'Warm unbleached paper';
+    themeIcon.textContent = 'light_mode';
+  });
+
+  // Tab navigation filter logic
+  const tabs = document.querySelectorAll('.tab-pill');
+  const secDownloads = document.getElementById('section-downloads');
+  const secHistory = document.getElementById('section-history');
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => {
+        t.classList.remove('bg-primary', 'text-on-primary', 'shadow-xs');
+        t.classList.add('bg-surface-container-low', 'text-on-surface');
+      });
+      tab.classList.add('bg-primary', 'text-on-primary', 'shadow-xs');
+      tab.classList.remove('bg-surface-container-low', 'text-on-surface');
+
+      const target = tab.dataset.target;
+      if (target === 'downloads') {
+        secDownloads.classList.remove('hidden');
+        secHistory.classList.add('hidden');
+      } else if (target === 'history') {
+        secDownloads.classList.add('hidden');
+        secHistory.classList.remove('hidden');
+      } else {
+        secDownloads.classList.remove('hidden');
+        secHistory.classList.remove('hidden');
+      }
+    });
+  });
+</script></main></body></html>

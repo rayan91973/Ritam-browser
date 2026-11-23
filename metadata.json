@@ -1,0 +1,6 @@
+{
+  "name": "Ritam Browser",
+  "description": "Fast, lightweight, privacy-focused Android web browser with integrated RITAM Shields ad and tracker blocking, multi-tab management, reader mode, bookmarks, history, and downloads.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

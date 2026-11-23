@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Ritam</string>
+    <string name="widget_search_hint">Search with Ritam…</string>
+    <string name="widget_voice_desc">Voice search in Ritam</string>
+    <string name="widget_private_desc">New Private Incognito tab</string>
+    <string name="widget_description">Quick private search, voice lookup, and one-tap Incognito tab.</string>
+</resources>

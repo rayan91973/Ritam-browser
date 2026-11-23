@@ -1,0 +1,227 @@
+---
+name: Serene Canvas
+colors:
+  surface: '#faf9f5'
+  surface-dim: '#dbdad6'
+  surface-bright: '#faf9f5'
+  surface-container-lowest: '#ffffff'
+  surface-container-low: '#f4f4f0'
+  surface-container: '#efeeea'
+  surface-container-high: '#e9e8e4'
+  surface-container-highest: '#e3e2df'
+  on-surface: '#1b1c1a'
+  on-surface-variant: '#414845'
+  inverse-surface: '#2f312e'
+  inverse-on-surface: '#f2f1ed'
+  outline: '#717974'
+  outline-variant: '#c1c8c3'
+  surface-tint: '#446557'
+  primary: '#1b3c30'
+  on-primary: '#ffffff'
+  primary-container: '#325346'
+  on-primary-container: '#a1c5b5'
+  inverse-primary: '#aacfbe'
+  secondary: '#526069'
+  on-secondary: '#ffffff'
+  secondary-container: '#d3e2ec'
+  on-secondary-container: '#56656e'
+  tertiary: '#293932'
+  on-tertiary: '#ffffff'
+  tertiary-container: '#3f5048'
+  on-tertiary-container: '#afc2b7'
+  error: '#ba1a1a'
+  on-error: '#ffffff'
+  error-container: '#ffdad6'
+  on-error-container: '#93000a'
+  primary-fixed: '#c6ebd9'
+  primary-fixed-dim: '#aacfbe'
+  on-primary-fixed: '#002116'
+  on-primary-fixed-variant: '#2c4d40'
+  secondary-fixed: '#d6e5ef'
+  secondary-fixed-dim: '#bac9d3'
+  on-secondary-fixed: '#0f1d25'
+  on-secondary-fixed-variant: '#3b4951'
+  tertiary-fixed: '#d4e7dc'
+  tertiary-fixed-dim: '#b8cbc0'
+  on-tertiary-fixed: '#0f1f18'
+  on-tertiary-fixed-variant: '#3a4a42'
+  background: '#faf9f5'
+  on-background: '#1b1c1a'
+  surface-variant: '#e3e2df'
+typography:
+  display-lg:
+    fontFamily: Newsreader
+    fontSize: 32px
+    fontWeight: '400'
+    lineHeight: 40px
+    letterSpacing: -0.02em
+  display-md:
+    fontFamily: Newsreader
+    fontSize: 26px
+    fontWeight: '400'
+    lineHeight: 34px
+    letterSpacing: -0.015em
+  headline-lg:
+    fontFamily: Newsreader
+    fontSize: 22px
+    fontWeight: '500'
+    lineHeight: 28px
+    letterSpacing: -0.01em
+  headline-md:
+    fontFamily: Newsreader
+    fontSize: 18px
+    fontWeight: '500'
+    lineHeight: 24px
+  body-lg:
+    fontFamily: Newsreader
+    fontSize: 18px
+    fontWeight: '400'
+    lineHeight: 28px
+  body-md:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 15px
+    fontWeight: '400'
+    lineHeight: 22px
+  body-sm:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 13px
+    fontWeight: '400'
+    lineHeight: 18px
+  label-lg:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 14px
+    fontWeight: '600'
+    lineHeight: 20px
+    letterSpacing: 0.01em
+  label-md:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 12px
+    fontWeight: '500'
+    lineHeight: 16px
+    letterSpacing: 0.02em
+  label-sm:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 11px
+    fontWeight: '600'
+    lineHeight: 14px
+    letterSpacing: 0.04em
+rounded:
+  sm: 0.25rem
+  DEFAULT: 0.5rem
+  md: 0.75rem
+  lg: 1rem
+  xl: 1.5rem
+  full: 9999px
+spacing:
+  gutter: 0.75rem
+  margin: 1rem
+  space-xs: 0.25rem
+  space-sm: 0.5rem
+  space-md: 0.75rem
+  space-lg: 1rem
+  space-xl: 1.5rem
+---
+
+## Brand & Style
+
+The design system establishes a quiet, tactile sanctuary for mobile web interaction. Tailored exclusively for a focused Android browsing experience, the aesthetic blends warm minimalism with literary craftsmanship, counteracting browser clutter, clickbait feeds, and hyper-saturated chrome.
+
+### Brand Character & Emotional Resonance
+- **Sanctuary & Clarity:** Interfaces exist purely to serve the content of the web, receding completely when reading or navigating.
+- **Literary Grounding:** The touchpoints feel akin to high-grade unbleached paper, fine botanical inks, and tactile editorial tools.
+- **Utilitarian Speed:** Lightweight, thumb-first ergonomic reachability with zero decorative friction or superfluous transitions.
+
+### Visual Style
+- **Warm Editorial Minimalism:** Anchored by bone-white, unbleached canvas backdrops, paired with deep botanical sage and precise 1px architectural lines.
+- **Subtle Organic Tactility:** Micro-surfaces elevate through gentle shifts in warm paper tones rather than heavy synthetic shadows, creating an interface that feels composed, calm, and deliberate.
+
+## Colors
+
+The palette is derived from natural cellulose, fieldstone, and dried botanical pigments. It avoids harsh pitch blacks and clinical blue-whites in favor of warm, low-fatigue tones.
+
+### Palette Roles
+- **Canvas Base (`#FAF9F5`):** Soft, warm unbleached paper background applied to root browser viewports and reading canvases.
+- **Primary Ink (`#325346`):** Deep forest sage used for active states, key interactive controls, progress indicators, and primary visual anchors.
+- **Primary Accent (`#4A6B5D`):** Mid-tone sage for pressed button states, active omnibox highlights, and focused indicators.
+- **Secondary Slate (`#526069`):** Grounded slate for secondary navigation iconography, inactive tabs, and technical badges.
+- **Muted Sage (`#8C9E94`):** Soft botanical wash for inactive switches, placeholder accents, and light indicator tracks.
+- **Primary Text (`#1E2321`):** Deep charcoal olive providing optimal reading contrast without the stark harshness of `#000000`.
+- **Secondary Text (`#68706B`):** Subdued field-grey for URLs, timestamps, metadata, and placeholder text.
+- **Structural Border (`#E2DDD3`):** Crisp 1px warm sand-grey for container delimiters, address bar borders, and bottom sheet divides.
+- **Surface Level 1 (`#F4F2EC`):** Resting surface for top toolbars, bottom action bars, and inset search fields.
+- **Surface Level 2 (`#EDEAE1`):** Elevated tone for floating omniboxes, popover sheets, context menus, and modal dialogs.
+
+## Typography
+
+The typographic pairing balances literary editorial grace with strict UI legibility:
+- **Newsreader** handles reading mode headlines, history headers, domain identity branding, and immersive text views. Its subtle serif proportions convey craft and scholarly attention.
+- **Plus Jakarta Sans** powers all chrome controls, address inputs, menu options, tab counts, and metadata. Its open apertures ensure instantaneous readability at compact mobile scales.
+
+### Hierarchical Usage Rules
+- `display-*` and `headline-lg` are reserved for Reader Mode headers, empty-canvas moments, and tab-grid section divisions.
+- `body-lg` in Newsreader provides the default setting for distraction-free reader articles.
+- `label-*` in Plus Jakarta Sans anchors the bottom navigation bar, context flyouts, security badge chips, and Omnibox URL rendering.
+
+## Layout & Spacing
+
+The layout is built for direct single-handed thumb interaction within modern Android viewport constraints. 
+
+### Ergonomics & Grid Architecture
+- **Thumb-Zone Prioritization:** All primary controls (Omnibox address bar, back/forward, tab switcher, reader toggle) are docked to the bottom safe area. The top edge is preserved solely for status data and uncluttered webview display.
+- **Grid Structure:** A 4-column fluid layout on mobile devices (`<600px`), shifting to an 8-column layout for foldables and tablets. 
+- **System Offsets:** Outer screen margin is strictly `1rem` (16px), with `0.75rem` (12px) internal grid gutters to allow dual-column tab card views to maximize content density without touching screen bounds.
+- **Touch Targets:** Strict adherence to a 48×48dp minimum tappable hit-box for all navigation anchors, even when visual icon footprints are 20dp or 24dp.
+
+## Elevation & Depth
+
+Visual separation relies on warm surface tiering and fine 1px outlines rather than heavy drop shadows.
+
+### Elevation Hierarchy
+1. **Level 0 (Canvas Base):** `#FAF9F5` — Flat base layer. No shadow, no border.
+2. **Level 1 (Docked Structural Bars):** `#F4F2EC` — Bottom navigation and search bar dock. Delimited by a solid 1px `#E2DDD3` border on intersecting edges.
+3. **Level 2 (Floating Floating Cards & Controls):** `#EDEAE1` — Floating bottom Omnibox, active tab tiles, and reader view controls. Supported by a 1px border `#E2DDD3` and a warm, ambient tint shadow: `0 4px 16px -2px rgba(50, 83, 70, 0.06)`.
+4. **Level 3 (Overlays & Menus):** `#EDEAE1` — Bottom sheets, context dialogs, bookmark managers. 1px border `#E2DDD3` paired with `0 8px 24px -4px rgba(50, 83, 70, 0.10)`. Scrim overlay uses `#1E2321` with 25% opacity.
+
+## Shapes
+
+The design system uses deliberate, refined corner radii ranging from 8px to 16px (`roundedness: 2`), reflecting an organic, pebble-like quality while preserving space efficiency on compact phone displays.
+
+### Radius Distribution
+- **Small Controls (8px / `rounded-md`):** Checkboxes, context menu items, URL security badges, and segmented reader settings.
+- **Medium Panels (16px / `rounded-lg`):** Browser tab cards, quick-action dialogs, bottom sheets, and the docked Omnibox input.
+- **Pill (9999px / `rounded-full`):** Omnibox interactive chip toggles (e.g., Reader Mode, HTTPS security lock), floating page action pills, and status tags.
+
+## Components
+
+### 1. Bottom Omnibox (Address Bar)
+- **Container:** Grounded or floating dock at bottom screen margin. Background `#EDEAE1`, border 1px `#E2DDD3`, radius 16px, shadow `0 4px 16px -2px rgba(50, 83, 70, 0.06)`.
+- **Domain Text:** Centered domain name in Plus Jakarta Sans (`label-lg`), `#1E2321`. Trailing path displayed in `#68706B`.
+- **Security & Action Badges:** 8px rounded icon button for SSL lock on the left; Reader toggle button (`#325346` when active) on the right.
+
+### 2. Buttons
+- **Primary:** Solid `#325346` fill, `#FAF9F5` text, 12px border radius, 44px height. Active/pressed state uses `#4A6B5D`.
+- **Secondary / Tonal:** `#F4F2EC` surface, 1px `#E2DDD3` border, `#325346` text. Active state darkens surface to `#EDEAE1`.
+- **Icon Actions:** 48×48dp hit-area with 24dp optical SVG icon. Tinted in `#526069`, shifting to `#325346` on press with an 8px circular ink ripple.
+
+### 3. Tab Switcher Cards
+- **Inactive Tab Card:** `#F4F2EC` background, 1px `#E2DDD3` border, 12px radius. Webpage preview inset by 6px with an 8px radius. Title rendered in Newsreader (`headline-md`).
+- **Active Tab Card:** `#EDEAE1` background, 2px `#325346` border, subtle ambient elevation shadow. Close button anchored top-right with a 32dp tap zone.
+
+### 4. Chips & Security Badges
+- **Structure:** Pill shape (`rounded-full`), height 28px, horizontal padding `space-sm` (8px).
+- **Default State:** `#F4F2EC` fill, 1px `#E2DDD3` border, `#68706B` text, 14dp icon prefix.
+- **Active State:** `#325346` fill, `#FAF9F5` text, borderless.
+
+### 5. Lists & History Rows
+- **Layout:** Edge-to-edge `#FAF9F5` or inset `#F4F2EC` list groups.
+- **Separators:** 1px solid hairline `#E2DDD3`, indented by 48px to preserve icon vertical alignment.
+- **Content:** Title in Plus Jakarta Sans (`body-md`), URL and timestamp in `#68706B` (`body-sm`).
+
+### 6. Reader Mode Viewport
+- **Background:** Strictly `#FAF9F5` canvas with zero UI distraction.
+- **Article Typography:** Headline in Newsreader `display-lg` (`#1E2321`), body in Newsreader `body-lg` with 1.7 line height for optimal readability.
+- **Reading Progress Bar:** 2px slim bar pinned to top edge, colored in `#325346`.
+
+### 7. Form Inputs & Search Fields
+- **Container:** Height 44px, surface `#F4F2EC`, border 1px solid `#E2DDD3`, radius 12px.
+- **Focus State:** 1px solid `#325346` with no exterior glow ring. Text color `#1E2321`, placeholder `#68706B`.

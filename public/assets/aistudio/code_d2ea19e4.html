@@ -1,0 +1,224 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"><meta content="mobile_stack" name="shell-type"><link href="https://fonts.googleapis.com" rel="preconnect"><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"><link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><style>@layer base{html,body{width:100vw;margin:0;padding:0;}body{overscroll-behavior:none;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "on-primary": "#ffffff", "background": "#faf9f5", "surface-container": "#efeeea", "on-primary-container": "#a1c5b5", "outline": "#717974", "error-container": "#ffdad6", "surface": "#faf9f5", "on-secondary": "#ffffff", "inverse-on-surface": "#f2f1ed", "on-surface": "#1b1c1a", "tertiary-container": "#3f5048", "on-secondary-container": "#56656e", "surface-container-highest": "#e3e2df", "surface-tint": "#446557", "inverse-primary": "#aacfbe", "surface-container-high": "#e9e8e4", "secondary-fixed-dim": "#bac9d3", "on-background": "#1b1c1a", "on-tertiary-fixed-variant": "#3a4a42", "on-tertiary-fixed": "#0f1f18", "on-tertiary": "#ffffff", "on-error-container": "#93000a", "primary-fixed-dim": "#aacfbe", "primary-fixed": "#c6ebd9", "inverse-surface": "#2f312e", "on-primary-fixed": "#002116", "surface-bright": "#faf9f5", "on-surface-variant": "#414845", "primary": "#1b3c30", "on-secondary-fixed-variant": "#3b4951", "tertiary-fixed": "#d4e7dc", "on-primary-fixed-variant": "#2c4d40", "tertiary-fixed-dim": "#b8cbc0", "surface-container-lowest": "#ffffff", "surface-dim": "#dbdad6", "secondary": "#526069", "secondary-container": "#d3e2ec", "outline-variant": "#c1c8c3", "surface-container-low": "#f4f4f0", "secondary-fixed": "#d6e5ef", "on-secondary-fixed": "#0f1d25", "tertiary": "#293932", "on-error": "#ffffff", "surface-variant": "#e3e2df", "error": "#ba1a1a", "primary-container": "#325346", "on-tertiary-container": "#afc2b7" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "space-xl": "1.5rem", "gutter": "0.75rem", "space-lg": "1rem", "space-xs": "0.25rem", "space-md": "0.75rem", "space-sm": "0.5rem", "margin": "1rem" }, "fontFamily": { "label-sm": ["Plus Jakarta Sans"], "label-lg": ["Plus Jakarta Sans"], "display-lg": ["Newsreader"], "body-sm": ["Plus Jakarta Sans"], "body-md": ["Plus Jakarta Sans"], "headline-md": ["Newsreader"], "body-lg": ["Newsreader"], "display-md": ["Newsreader"], "label-md": ["Plus Jakarta Sans"], "headline-lg": ["Newsreader"] }, "fontSize": { "label-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0.04em", "fontWeight": "600" }], "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }], "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "400" }], "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }], "body-md": ["15px", { "lineHeight": "22px", "fontWeight": "400" }], "headline-md": ["18px", { "lineHeight": "24px", "fontWeight": "500" }], "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }], "display-md": ["26px", { "lineHeight": "34px", "letterSpacing": "-0.015em", "fontWeight": "400" }], "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500" }], "headline-lg": ["22px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "500" }] } } } };</script><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head><body class="bg-surface font-body-md text-body-md text-on-surface flex flex-col min-h-screen selection:bg-primary-fixed selection:text-on-primary-fixed"><header class="fixed top-0 w-full z-50 pt-safe bg-surface/85 backdrop-blur-xl shadow-[0_1px_8px_rgba(50,83,70,0.04)]"><div class="h-16 px-margin flex items-center justify-between gap-space-sm"><div class="flex items-center gap-space-xs"><button aria-label="Go back" class="w-11 h-11 -ml-space-xs flex items-center justify-center rounded-full text-secondary hover:text-primary active:bg-surface-container-high transition-colors" onclick="history.back()" type="button"><span class="material-symbols-outlined text-[24px]">arrow_back</span></button><h1 class="font-headline-lg text-headline-lg text-primary tracking-tight font-medium">Library &amp; Controls</h1></div><div class="flex items-center gap-space-xs"><button aria-label="Search history and downloads" class="w-11 h-11 flex items-center justify-center rounded-full text-secondary hover:text-primary active:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[22px]">search</span></button><button aria-label="More actions" class="w-11 h-11 flex items-center justify-center rounded-full text-secondary hover:text-primary active:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[22px]">tune</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center ml-space-xs"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 bg-surface px-margin pb-safe"><div class="flex flex-col w-full pb-10 space-y-5">
+<!-- Status & Context Subheader (Complements app shell) -->
+<div class="flex items-center justify-between pt-1">
+<div class="flex items-center gap-space-xs">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed font-label-sm text-label-sm uppercase tracking-wider font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-primary mr-1.5 animate-pulse"></span>
+        1 In Flight
+      </span>
+<span class="text-secondary font-label-md text-label-md">12 files indexed</span>
+</div>
+<button class="flex items-center gap-1 text-primary hover:text-primary-container transition-colors font-label-md text-label-md font-medium px-2 py-1 rounded-lg hover:bg-surface-container-high" type="button">
+<span class="material-symbols-outlined text-[16px]">folder_open</span>
+      Storage path
+    </button>
+</div>
+<!-- Storage Meter & Tactile Sanctuary Overview Card -->
+<div class="w-full bg-surface-container-low rounded-xl shadow-sm flex flex-col gap-space-md p-3">
+<div class="flex items-start justify-between">
+<div class="space-y-0.5">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-secondary font-semibold">Local Repository</span>
+<h2 class="font-headline-md text-headline-md text-on-surface">1.4 GB <span class="font-body-md text-body-md text-secondary">retained of 128 GB</span></h2>
+</div>
+<div class="w-10 h-10 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">pie_chart</span>
+</div>
+</div>
+<!-- Visual Segmented Storage Bar -->
+<div class="w-full space-y-1.5">
+<div class="w-full h-2.5 bg-surface-container-highest rounded-full overflow-hidden flex">
+<div class="h-full bg-primary rounded-l-full transition-all duration-500" style="width: 24%"></div>
+<div class="h-full bg-surface-tint opacity-80" style="width: 14%"></div>
+<div class="h-full bg-outline-variant opacity-60" style="width: 8%"></div>
+</div>
+<div class="flex items-center justify-between text-secondary font-label-sm text-label-sm">
+<div class="flex items-center gap-space-sm">
+<span class="inline-flex items-center gap-1">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+            Downloads (1.4 GB)
+          </span>
+<span class="inline-flex items-center gap-1">
+<span class="w-2 h-2 rounded-full bg-outline-variant"></span>
+            Free (108 GB)
+          </span>
+</div>
+<span class="font-medium text-primary">12% utilized</span>
+</div>
+</div>
+<!-- Storage Quick Actions -->
+<div class="pt-1 flex items-center gap-space-sm">
+<button class="flex-1 h-9 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-primary font-label-md text-label-md font-semibold transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]" type="button">
+<span class="material-symbols-outlined text-[16px]">cleaning_services</span>
+        Clear Done
+      </button>
+<button class="flex-1 h-9 rounded-lg bg-primary text-on-primary font-label-md text-label-md font-semibold transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-sm" type="button">
+<span class="material-symbols-outlined text-[16px]">folder</span>
+        Open Folder
+      </button>
+</div>
+</div>
+<!-- Scrollable Filter Chips -->
+<div class="flex items-center gap-space-xs overflow-x-auto pb-1 -mx-margin px-margin scrollbar-none">
+<button class="shrink-0 h-7 px-3 rounded-full bg-primary text-on-primary font-label-md text-label-md font-semibold flex items-center gap-1 shadow-xs" type="button">
+<span>All</span>
+<span class="opacity-80 text-[11px]">(12)</span>
+</button>
+<button class="shrink-0 h-7 px-3 rounded-full bg-surface-container-low hover:bg-surface-container text-secondary font-label-md text-label-md font-medium flex items-center gap-1 transition-colors" type="button">
+<span>Documents</span>
+<span class="opacity-70 text-[11px]">(5)</span>
+</button>
+<button class="shrink-0 h-7 px-3 rounded-full bg-surface-container-low hover:bg-surface-container text-secondary font-label-md text-label-md font-medium flex items-center gap-1 transition-colors" type="button">
+<span>Media &amp; Audio</span>
+<span class="opacity-70 text-[11px]">(4)</span>
+</button>
+<button class="shrink-0 h-7 px-3 rounded-full bg-surface-container-low hover:bg-surface-container text-secondary font-label-md text-label-md font-medium flex items-center gap-1 transition-colors" type="button">
+<span>Archives</span>
+<span class="opacity-70 text-[11px]">(3)</span>
+</button>
+<button class="shrink-0 h-7 px-3 rounded-full bg-surface-container-low hover:bg-surface-container text-secondary font-label-md text-label-md font-medium flex items-center gap-1 transition-colors" type="button">
+<span>Images</span>
+</button>
+</div>
+<!-- Active Transfer Card (Moment of Delight: Tactile live progress) -->
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center justify-between px-0.5">
+<h3 class="font-headline-md text-headline-md text-primary font-medium flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[20px] animate-bounce">arrow_downward</span>
+        Active Transfer
+      </h3>
+<span class="font-label-sm text-label-sm text-secondary font-medium">1 task</span>
+</div>
+<div class="w-full bg-surface-container-low rounded-xl shadow-sm flex flex-col gap-space-md p-3">
+<div class="flex items-start justify-between gap-space-sm">
+<div class="w-10 h-10 rounded-lg bg-primary-fixed text-primary flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[22px]">deployed_code</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-center gap-1.5">
+<h4 class="font-label-lg text-label-lg text-on-surface truncate font-semibold">Android-15-Kernel-Source.tar.gz</h4>
+</div>
+<p class="font-body-sm text-body-sm text-secondary mt-0.5 flex items-center gap-1.5">
+<span>420 MB / 850 MB</span>
+<span>•</span>
+<span class="text-primary font-medium">12.4 MB/s</span>
+<span>•</span>
+<span>~34s left</span>
+</p>
+</div>
+</div>
+<!-- Emerald Visual Progress -->
+<div class="space-y-1">
+<div class="w-full h-2 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full transition-all duration-300" style="width: 49.4%"></div>
+</div>
+<div class="flex justify-between items-center text-secondary font-label-sm text-label-sm">
+<span>Processing payload...</span>
+<span class="font-semibold text-primary">49%</span>
+</div>
+</div>
+<!-- Controls -->
+<div class="flex items-center justify-end gap-space-xs pt-0.5">
+<button aria-label="Cancel download" class="h-8 px-3 rounded-lg bg-surface-container hover:bg-surface-container-high text-secondary hover:text-error transition-colors font-label-md text-label-md font-medium flex items-center gap-1" type="button">
+<span class="material-symbols-outlined text-[16px]">close</span>
+          Cancel
+        </button>
+<button class="h-8 px-3.5 rounded-lg bg-primary-container text-on-primary font-label-md text-label-md font-medium flex items-center gap-1 active:scale-95 transition-all" id="pauseResumeBtn" type="button">
+<span class="material-symbols-outlined text-[16px]" id="pauseIcon">pause</span>
+<span id="pauseLabel">Pause</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Completed Downloads Section -->
+<div class="flex flex-col gap-space-md pt-2">
+<!-- Group: Today -->
+<div class="space-y-space-xs">
+<div class="flex items-center justify-between px-0.5">
+<h3 class="font-headline-md text-headline-md text-primary font-medium">Today</h3>
+<span class="font-label-sm text-label-sm text-secondary">2 entries</span>
+</div>
+<div class="bg-surface-container-low rounded-xl overflow-hidden shadow-xs divide-y divide-surface-container-high"><!-- PDF Item --><div class="px-3 py-2 flex items-center gap-space-sm hover:bg-surface-container transition-colors"><div class="w-8 h-8 rounded-lg bg-error-container text-on-error-container flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px]">picture_as_pdf</span></div><div class="flex-1 min-w-0"><h4 class="font-label-lg text-label-lg text-on-surface truncate font-semibold">Ritam-Whitepaper-v2.pdf</h4><div class="flex items-center gap-1.5 text-secondary font-body-sm text-body-sm"><span class="uppercase tracking-wider font-label-sm text-label-sm text-primary font-semibold">PDF</span><span>•</span><span>14.2 MB</span><span>•</span><span>2 hrs ago</span></div></div><div class="flex items-center gap-space-xs shrink-0"><button aria-label="Share PDF" class="w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:text-primary hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[18px]">share</span></button><button aria-label="File context menu" class="w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:text-primary hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[18px]">more_vert</span></button></div></div><!-- Audio Item --><div class="px-3 py-2 flex items-center gap-space-sm hover:bg-surface-container transition-colors"><div class="w-8 h-8 rounded-lg bg-secondary-container text-on-secondary-container flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px]">graphic_eq</span></div><div class="flex-1 min-w-0"><h4 class="font-label-lg text-label-lg text-on-surface truncate font-semibold">ambient-forest-audio.flac</h4><div class="flex items-center gap-1.5 text-secondary font-body-sm text-body-sm"><span class="uppercase tracking-wider font-label-sm text-label-sm text-secondary font-semibold">FLAC</span><span>•</span><span>38.0 MB</span><span>•</span><span>4 hrs ago</span></div></div><div class="flex items-center gap-space-xs shrink-0"><button aria-label="Quick listen" class="w-8 h-8 rounded-full bg-primary-fixed text-primary flex items-center justify-center hover:bg-primary-fixed-dim transition-colors" id="inlinePlayBtn" type="button"><span class="material-symbols-outlined text-[18px]" id="playAudioIcon">play_arrow</span></button><button aria-label="Share audio" class="w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:text-primary hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[18px]">share</span></button></div></div></div>
+</div>
+<!-- Group: Earlier this week -->
+<div class="space-y-space-xs">
+<div class="flex items-center justify-between px-0.5">
+<h3 class="font-headline-md text-headline-md text-primary font-medium">Earlier this week</h3>
+<span class="font-label-sm text-label-sm text-secondary">3 entries</span>
+</div>
+<div class="bg-surface-container-low rounded-xl overflow-hidden shadow-xs divide-y divide-surface-container-high"><!-- ZIP Archive Item --><div class="px-3 py-2 flex items-center gap-space-sm hover:bg-surface-container transition-colors"><div class="w-8 h-8 rounded-lg bg-tertiary-fixed text-on-tertiary-fixed flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px]">folder_zip</span></div><div class="flex-1 min-w-0"><h4 class="font-label-lg text-label-lg text-on-surface truncate font-semibold">webgpu-compute-pipeline.zip</h4><div class="flex items-center gap-1.5 text-secondary font-body-sm text-body-sm"><span class="uppercase tracking-wider font-label-sm text-label-sm text-tertiary font-semibold">ZIP</span><span>•</span><span>112.5 MB</span><span>•</span><span>2 days ago</span></div></div><div class="flex items-center gap-space-xs shrink-0"><button aria-label="Unarchive options" class="w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:text-primary hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[18px]">unarchive</span></button><button aria-label="File context menu" class="w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:text-primary hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[18px]">more_vert</span></button></div></div><!-- JSON Code Item --><div class="px-3 py-2 flex items-center gap-space-sm hover:bg-surface-container transition-colors"><div class="w-8 h-8 rounded-lg bg-surface-container-highest text-secondary flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px]">data_object</span></div><div class="flex-1 min-w-0"><h4 class="font-label-lg text-label-lg text-on-surface truncate font-semibold">design-tokens-export.json</h4><div class="flex items-center gap-1.5 text-secondary font-body-sm text-body-sm"><span class="uppercase tracking-wider font-label-sm text-label-sm text-secondary font-semibold">JSON</span><span>•</span><span>240 KB</span><span>•</span><span>3 days ago</span></div></div><div class="flex items-center gap-space-xs shrink-0"><button aria-label="View source code" class="w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:text-primary hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[18px]">visibility</span></button><button aria-label="File context menu" class="w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:text-primary hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[18px]">more_vert</span></button></div></div><!-- SVG Vector Preview Item --><div class="px-3 py-2 flex items-center gap-space-sm hover:bg-surface-container transition-colors"><div class="w-8 h-8 rounded-lg bg-surface-container-high overflow-hidden flex items-center justify-center shrink-0"><img class="w-full h-full object-cover" data-alt="Geometric minimalist botanical emblem printed on handmade ivory paper with sage green accent lines, serene vector illustration style" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBa9k97tBOYka5Q8hCmvgRTY59lLBY5kKjSj2MVaL293TzLQiZdBVFp0t4b3k_0gY47tnxLM_hQfZ5HmVoDGFfQ2mr6-U96x23XhKxdy2qI1FL8vsBWybF_zMqRBg4wbAQiAfozhd2IlAT3zVg01_F89Loxklfz9J2-Mu35hgwk_8f2GgfJ28K4pEG17H9vtOADPXcCg_wWxx0EmBpA5qUkkRapPXpGY2SDcu7pD3kQ"></div><div class="flex-1 min-w-0"><h4 class="font-label-lg text-label-lg text-on-surface truncate font-semibold">figma-backup-tokens.svg</h4><div class="flex items-center gap-1.5 text-secondary font-body-sm text-body-sm"><span class="uppercase tracking-wider font-label-sm text-label-sm text-secondary font-semibold">SVG</span><span>•</span><span>1.8 MB</span><span>•</span><span>5 days ago</span></div></div><div class="flex items-center gap-space-xs shrink-0"><button aria-label="Share SVG" class="w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:text-primary hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[18px]">share</span></button><button aria-label="File context menu" class="w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:text-primary hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[18px]">more_vert</span></button></div></div></div>
+</div>
+</div>
+<!-- Bottom Utility & Download Preferences Banner -->
+<div class="w-full bg-surface-container rounded-xl p-space-md flex flex-col gap-space-sm mt-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="material-symbols-outlined text-secondary text-[20px]">folder_special</span>
+<div class="min-w-0">
+<p class="font-label-sm text-label-sm uppercase tracking-wider text-secondary font-medium">Automatic destination</p>
+<p class="font-body-sm text-body-sm text-on-surface truncate font-medium">/Internal Storage/Download/Ritam</p>
+</div>
+</div>
+<button class="text-primary hover:text-primary-container font-label-md text-label-md font-semibold underline underline-offset-4 shrink-0 px-1" type="button">
+        Change
+      </button>
+</div>
+<!-- Ergonomic Toggle -->
+<label class="flex items-center justify-between pt-2 cursor-pointer border-t border-outline-variant/30">
+<div class="pr-2">
+<span class="font-label-md text-label-md text-on-surface font-medium block">Ask where to save each file</span>
+<span class="font-body-sm text-body-sm text-secondary">Prompts folder selector prior to download start</span>
+</div>
+<div class="relative inline-flex items-center cursor-pointer shrink-0">
+<input checked="" class="sr-only peer" id="promptToggle" type="checkbox">
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</div>
+</label>
+</div>
+</div>
+<script>
+  // Micro-interaction for Pause/Resume active download
+  const pauseBtn = document.getElementById('pauseResumeBtn');
+  const pauseIcon = document.getElementById('pauseIcon');
+  const pauseLabel = document.getElementById('pauseLabel');
+  let isPaused = false;
+
+  if (pauseBtn) {
+    pauseBtn.addEventListener('click', () => {
+      isPaused = !isPaused;
+      if (isPaused) {
+        pauseIcon.textContent = 'play_arrow';
+        pauseLabel.textContent = 'Resume';
+        pauseBtn.classList.replace('bg-primary-container', 'bg-surface-container-highest');
+        pauseBtn.classList.replace('text-on-primary', 'text-on-surface');
+      } else {
+        pauseIcon.textContent = 'pause';
+        pauseLabel.textContent = 'Pause';
+        pauseBtn.classList.replace('bg-surface-container-highest', 'bg-primary-container');
+        pauseBtn.classList.replace('text-on-surface', 'text-on-primary');
+      }
+    });
+  }
+
+  // Micro-interaction for inline audio preview
+  const playBtn = document.getElementById('inlinePlayBtn');
+  const playIcon = document.getElementById('playAudioIcon');
+  let isPlaying = false;
+
+  if (playBtn) {
+    playBtn.addEventListener('click', () => {
+      isPlaying = !isPlaying;
+      playIcon.textContent = isPlaying ? 'pause' : 'play_arrow';
+      playBtn.classList.toggle('ring-2');
+      playBtn.classList.toggle('ring-primary');
+    });
+  }
+</script></main>
+
+</body></html>
