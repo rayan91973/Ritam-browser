@@ -4,17 +4,23 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.print.PrintAttributes
 import android.print.PrintManager
 import android.view.View
 import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
 import android.webkit.DownloadListener
+import android.webkit.GeolocationPermissions
+import android.webkit.JavascriptInterface
+import android.webkit.PermissionRequest
 import android.webkit.SslErrorHandler
 import android.webkit.URLUtil
 import android.webkit.WebChromeClient
@@ -25,23 +31,52 @@ import android.webkit.WebSettings
 import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import com.example.data.local.UserscriptEntity
 import com.example.privacy.BlockCategory
+import com.example.privacy.HomographAndPhishingGuard
+import com.example.privacy.HomographWarningState
 import com.example.privacy.RitamShieldsEngine
+import com.example.privacy.UrlCleaner
 import org.json.JSONObject
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 class WebViewManager(
     private val context: Context,
     private val shieldsEngine: RitamShieldsEngine
 ) {
-    private val maxLiveWebViews = 5
+    private val maxLiveWebViews = 8
     private val liveWebViews = LinkedHashMap<String, WebView>(maxLiveWebViews, 0.75f, true)
     private val savedBundles = HashMap<String, Bundle>()
     private val pendingUrls = HashMap<String, String>()
     private val desktopModeByTab = HashMap<String, Boolean>()
     private val zoomByTab = HashMap<String, Int>()
+    private val tabTemporaryPermissions = ConcurrentHashMap<String, MutableSet<String>>()
+    private val tabLastHost = ConcurrentHashMap<String, String>()
+    private val bypassedHomographHosts = ConcurrentHashMap.newKeySet<String>()
+    private val playingMediaTabs = ConcurrentHashMap.newKeySet<String>()
+    private val pinnedTabIds = ConcurrentHashMap.newKeySet<String>()
+    private val mainHandler = Handler(Looper.getMainLooper())
     @Volatile
     var confirmExternalAppLaunch: Boolean = true
+    @Volatile
+    var fingerprintRandomizerEnabled: Boolean = true
+    @Volatile
+    var userscriptsEnabled: Boolean = true
+    @Volatile
+    var activeUserscripts: List<UserscriptEntity> = emptyList()
+    @Volatile
+    var unwrapRedirectLinksEnabled: Boolean = true
+    @Volatile
+    var homographGuardEnabled: Boolean = true
+    @Volatile
+    var strictReferrerPolicyEnabled: Boolean = true
+    @Volatile
+    var blockWebRtcLeaksEnabled: Boolean = true
+    @Volatile
+    var lockdownCovertApisEnabled: Boolean = true
+    @Volatile
+    var stripTrackingParamsEnabled: Boolean = true
 
     interface Callbacks {
         fun onPageProgress(tabId: String, progress: Int)
@@ -60,14 +95,143 @@ class WebViewManager(
         fun onExternalAppRequested(request: ExternalAppRequest)
         fun onLongPressContext(request: WebContextMenuRequest)
         fun onPdfUrlDetected(tabId: String, url: String)
+        fun onDocumentUrlDetected(tabId: String, url: String, mimeType: String = "") {}
         fun onFullscreenVideoChanged(customView: View?, callback: WebChromeClient.CustomViewCallback?)
         fun onMediaPlaybackDetected(tabId: String, hasMedia: Boolean, isPlaying: Boolean)
+        fun onElementPicked(tabId: String, domain: String, selector: String) {}
+        fun onClipboardReadAttempt(tabId: String, host: String) {}
+        fun onFeedDiscovered(tabId: String, feedUrl: String?) {}
+        fun onPrivacyApiBlocked(tabId: String, host: String, apiName: String) {}
+        fun onHomographDetected(warning: HomographWarningState) {}
+        fun onRedirectUnwrapped(tabId: String, wrapperHost: String, unwrappedUrl: String) {}
+        fun onHttpsUpgraded(tabId: String, domain: String) {}
+        fun onWebPermissionRequested(request: WebPermissionPromptRequest) {}
+        fun onTemporaryGrantsCleared(tabId: String) {}
     }
 
     private var callbacks: Callbacks? = null
 
     fun setCallbacks(cb: Callbacks) {
         callbacks = cb
+    }
+
+    fun allowHomographHostOnce(host: String) {
+        if (host.isNotBlank()) bypassedHomographHosts.add(host.lowercase().removePrefix("www."))
+    }
+
+    fun clearBypassedHomographHosts() {
+        bypassedHomographHosts.clear()
+    }
+
+    fun grantTemporaryTabPermissions(tabId: String, keys: Collection<String>) {
+        val set = tabTemporaryPermissions.getOrPut(tabId) { ConcurrentHashMap.newKeySet() }
+        set.addAll(keys)
+    }
+
+    fun getTemporaryTabPermissions(tabId: String): Set<String> {
+        return tabTemporaryPermissions[tabId]?.toSet() ?: emptySet()
+    }
+
+    fun hasLiveWebView(tabId: String): Boolean = liveWebViews.containsKey(tabId)
+
+    fun syncPinnedTabs(ids: Set<String>) {
+        pinnedTabIds.clear()
+        pinnedTabIds.addAll(ids)
+    }
+
+    fun resumeAllLiveWebViews() {
+        mainHandler.post {
+            liveWebViews.values.forEach { wv ->
+                runCatching {
+                    wv.onResume()
+                    wv.resumeTimers()
+                }
+            }
+        }
+    }
+
+    fun onEnteringPipMode(tabId: String) {
+        val wv = liveWebViews[tabId] ?: return
+        runCatching {
+            wv.onResume()
+            wv.resumeTimers()
+        }
+        wv.evaluateJavascript(
+            """
+            (function() {
+                try {
+                    window.__ritamPipGuardUntil = Date.now() + 3000;
+                    var vids = document.querySelectorAll('video');
+                    for (var i = 0; i < vids.length; i++) {
+                        if (!vids[i].paused && !vids[i].ended) {
+                            vids[i].dataset.ritamKeepPlaying = '1';
+                        }
+                    }
+                } catch (e) {}
+            })();
+            """.trimIndent(),
+            null
+        )
+    }
+
+    fun setPipVideoFocusMode(tabId: String, active: Boolean) {
+        val wv = liveWebViews[tabId] ?: return
+        if (active) {
+            runCatching {
+                wv.onResume()
+                wv.resumeTimers()
+            }
+            wv.evaluateJavascript(
+                """
+                (function() {
+                    try {
+                        var styleId = 'ritam-pip-focus-style';
+                        var s = document.getElementById(styleId);
+                        if (!s) {
+                            s = document.createElement('style');
+                            s.id = styleId;
+                            s.textContent = 'html.ritam-pip-active body > * { visibility: hidden !important; } html.ritam-pip-active video[data-ritam-pip-target="1"] { visibility: visible !important; position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; object-fit: contain !important; background: #000 !important; z-index: 2147483647 !important; }';
+                            (document.head || document.documentElement).appendChild(s);
+                        }
+                        var vids = document.querySelectorAll('video');
+                        var target = null;
+                        for (var i = 0; i < vids.length; i++) {
+                            if (!vids[i].paused && !vids[i].ended) { target = vids[i]; break; }
+                        }
+                        if (!target && vids.length > 0) target = vids[0];
+                        if (target) {
+                            if (target.dataset.ritamKeepPlaying === '1' && target.paused) {
+                                target.play().catch(function(){});
+                            }
+                            if (target.videoWidth > 0 && document.fullscreenElement == null) {
+                                target.setAttribute('data-ritam-pip-target', '1');
+                                document.documentElement.classList.add('ritam-pip-active');
+                            }
+                        }
+                    } catch (e) {}
+                })();
+                """.trimIndent(),
+                null
+            )
+        } else {
+            wv.evaluateJavascript(
+                """
+                (function() {
+                    try {
+                        document.documentElement.classList.remove('ritam-pip-active');
+                        var vids = document.querySelectorAll('video[data-ritam-pip-target]');
+                        for (var i = 0; i < vids.length; i++) {
+                            vids[i].removeAttribute('data-ritam-pip-target');
+                            delete vids[i].dataset.ritamKeepPlaying;
+                        }
+                        var s = document.getElementById('ritam-pip-focus-style');
+                        if (s && s.parentNode) s.parentNode.removeChild(s);
+                    } catch (e) {}
+                })();
+                """.trimIndent(),
+                null
+            )
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -81,9 +245,13 @@ class WebViewManager(
             return existing
         }
 
-        // Enforce memory cap by releasing least-recently-used inactive WebView
+        // Enforce memory cap by releasing least-recently-used inactive, non-playing, non-pinned WebView
         if (liveWebViews.size >= maxLiveWebViews) {
-            val oldestKey = liveWebViews.keys.firstOrNull { it != tab.id }
+            val oldestKey = liveWebViews.keys.firstOrNull {
+                it != tab.id && !playingMediaTabs.contains(it) && !pinnedTabIds.contains(it)
+            } ?: liveWebViews.keys.firstOrNull {
+                it != tab.id && !playingMediaTabs.contains(it)
+            } ?: liveWebViews.keys.firstOrNull { it != tab.id }
             if (oldestKey != null) {
                 liveWebViews.remove(oldestKey)?.let { evicted ->
                     val bundle = Bundle()
@@ -105,6 +273,7 @@ class WebViewManager(
                 builtInZoomControls = true
                 displayZoomControls = false
                 setSupportZoom(true)
+                mediaPlaybackRequiresUserGesture = false
                 allowFileAccess = false
                 allowContentAccess = false
                 @Suppress("DEPRECATION")
@@ -113,20 +282,58 @@ class WebViewManager(
                 allowUniversalAccessFromFileURLs = false
                 mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                 safeBrowsingEnabled = true
-                if (tab.isPrivate) {
-                    cacheMode = WebSettings.LOAD_NO_CACHE
-                }
+                cacheMode = resolveCacheMode(
+                    isPrivate = tab.isPrivate,
+                    isOnline = com.example.services.RitamCacheManager.isOnline(context)
+                )
             }
 
             val isDesktop = desktopModeByTab[tab.id] ?: tab.isDesktopMode
             desktopModeByTab[tab.id] = isDesktop
             zoomByTab[tab.id] = tab.zoomPercent
             applyDesktopUserAgent(this, isDesktop, tab.zoomPercent)
-            applyNativeForceDark(this, shieldsEngine.shouldForceDarkForDomain(tab.domain))
+            // Keep WebView algorithmic dark disabled so our luminance-aware CSS engine never double-inverts
+            applyNativeForceDark(this, false)
 
             val cookieManager = CookieManager.getInstance()
             cookieManager.setAcceptCookie(!tab.isPrivate)
             cookieManager.setAcceptThirdPartyCookies(this, !tab.isPrivate && !blockThirdPartyCookies)
+
+            addJavascriptInterface(object {
+                @JavascriptInterface
+                fun onElementPicked(selector: String?) {
+                    mainHandler.post {
+                        val currentDomain = runCatching { Uri.parse(this@apply.url).host }.getOrNull().orEmpty()
+                        callbacks?.onElementPicked(tab.id, currentDomain, selector.orEmpty())
+                    }
+                }
+
+                @JavascriptInterface
+                fun onClipboardReadAttempt(host: String?) {
+                    mainHandler.post {
+                        callbacks?.onClipboardReadAttempt(tab.id, host.orEmpty())
+                    }
+                }
+
+                @JavascriptInterface
+                fun onPrivacyApiBlocked(host: String?, apiName: String?) {
+                    mainHandler.post {
+                        callbacks?.onPrivacyApiBlocked(
+                            tab.id,
+                            host.orEmpty(),
+                            apiName.orEmpty().ifBlank { "Covert API" }
+                        )
+                    }
+                }
+
+                @JavascriptInterface
+                fun onMediaStateChanged(hasMedia: Boolean, isPlaying: Boolean) {
+                    if (isPlaying) playingMediaTabs.add(tab.id) else playingMediaTabs.remove(tab.id)
+                    mainHandler.post {
+                        callbacks?.onMediaPlaybackDetected(tab.id, hasMedia, isPlaying)
+                    }
+                }
+            }, "RitamBridge")
 
             setOnScrollChangeListener { _, _, scrollY, _, oldScrollY ->
                 callbacks?.onScrollDelta(tab.id, scrollY - oldScrollY, scrollY)
@@ -195,6 +402,97 @@ class WebViewManager(
                 override fun onHideCustomView() {
                     callbacks?.onFullscreenVideoChanged(null, null)
                 }
+
+                override fun onPermissionRequest(request: PermissionRequest?) {
+                    if (request == null) return
+                    val originUrl = request.origin?.toString() ?: this@apply.url ?: ""
+                    val domain = runCatching { Uri.parse(originUrl).host }.getOrNull()
+                        ?.lowercase()?.removePrefix("www.") ?: ""
+                    val resources = request.resources ?: emptyArray()
+                    val keys = mutableListOf<String>()
+                    val labels = mutableListOf<String>()
+                    if (resources.contains(PermissionRequest.RESOURCE_VIDEO_CAPTURE)) {
+                        keys.add("CAMERA")
+                        labels.add("Camera")
+                    }
+                    if (resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
+                        keys.add("MICROPHONE")
+                        labels.add("Microphone")
+                    }
+                    if (keys.isEmpty()) {
+                        // Non-sensor resources (e.g. EME/DRM or MIDI) - grant safely only on HTTPS
+                        if (originUrl.startsWith("https://", ignoreCase = true)) {
+                            request.grant(resources)
+                        } else {
+                            request.deny()
+                        }
+                        return
+                    }
+                    val siteSetting = shieldsEngine.getSiteSettingForDomain(domain)
+                    val allBlocked = keys.any { key ->
+                        when (key) {
+                            "CAMERA" -> siteSetting?.cameraPermission == -1
+                            "MICROPHONE" -> siteSetting?.micPermission == -1
+                            else -> false
+                        }
+                    }
+                    if (allBlocked) {
+                        request.deny()
+                        return
+                    }
+                    val tempGrants = tabTemporaryPermissions[tab.id].orEmpty()
+                    val allGranted = keys.all { key ->
+                        key in tempGrants || when (key) {
+                            "CAMERA" -> siteSetting?.cameraPermission == 1
+                            "MICROPHONE" -> siteSetting?.micPermission == 1
+                            else -> false
+                        }
+                    }
+                    if (allGranted) {
+                        request.grant(resources)
+                        return
+                    }
+                    callbacks?.onWebPermissionRequested(
+                        WebPermissionPromptRequest(
+                            tabId = tab.id,
+                            origin = originUrl,
+                            domain = domain.ifBlank { originUrl },
+                            permissionKeys = keys,
+                            resourceLabels = labels,
+                            rawPermissionRequest = request
+                        )
+                    )
+                }
+
+                override fun onGeolocationPermissionsShowPrompt(
+                    origin: String?,
+                    callback: GeolocationPermissions.Callback?
+                ) {
+                    if (callback == null) return
+                    val safeOrigin = origin.orEmpty()
+                    val domain = runCatching { Uri.parse(safeOrigin).host }.getOrNull()
+                        ?.lowercase()?.removePrefix("www.") ?: safeOrigin
+                    val siteSetting = shieldsEngine.getSiteSettingForDomain(domain)
+                    val tempGrants = tabTemporaryPermissions[tab.id].orEmpty()
+                    when {
+                        siteSetting?.locationPermission == -1 -> callback.invoke(origin, false, false)
+                        siteSetting?.locationPermission == 1 || "LOCATION" in tempGrants ->
+                            callback.invoke(origin, true, false)
+                        else -> {
+                            callbacks?.onWebPermissionRequested(
+                                WebPermissionPromptRequest(
+                                    tabId = tab.id,
+                                    origin = safeOrigin,
+                                    domain = domain.ifBlank { safeOrigin },
+                                    permissionKeys = listOf("LOCATION"),
+                                    resourceLabels = listOf("Precise Location"),
+                                    geoOrigin = origin,
+                                    geoCallback = callback
+                                )
+                            )
+                        }
+                    }
+                }
             }
 
             webViewClient = object : WebViewClient() {
@@ -225,21 +523,56 @@ class WebViewManager(
                         return true
                     }
 
-                    // Intercept direct PDF links inside browser into built-in PDF Viewer
+                    // Intercept direct PDF and viewable Office/Markdown links into built-in viewer
                     val cleanPath = request.url.path?.lowercase() ?: ""
                     if (cleanPath.endsWith(".pdf")) {
                         callbacks?.onPdfUrlDetected(tab.id, reqUrl)
                         return true
                     }
-
-                    if (shieldsEngine.isMaliciousUrl(reqUrl)) {
-                        val host = request.url.host ?: reqUrl
-                        callbacks?.onMaliciousNavigationBlocked(tab.id, reqUrl, host)
+                    if (com.example.services.UniversalViewerHelper.shouldOpenDirectlyInViewer(reqUrl)) {
+                        callbacks?.onDocumentUrlDetected(tab.id, reqUrl, "")
                         return true
                     }
 
-                    val upgraded = shieldsEngine.maybeUpgradeToHttps(reqUrl, view?.url?.let { Uri.parse(it).host })
-                    if (upgraded != reqUrl) {
+                    var candidateUrl = reqUrl
+                    if (unwrapRedirectLinksEnabled) {
+                        val unwrapRes = UrlCleaner.unwrapRedirectUrl(candidateUrl)
+                        if (unwrapRes.wasUnwrapped) {
+                            val finalClean = if (stripTrackingParamsEnabled) {
+                                UrlCleaner.cleanUrl(unwrapRes.unwrappedUrl).cleanedUrl
+                            } else {
+                                unwrapRes.unwrappedUrl
+                            }
+                            callbacks?.onRedirectUnwrapped(
+                                tab.id,
+                                unwrapRes.wrapperHost ?: "redirect",
+                                finalClean
+                            )
+                            view?.loadUrl(finalClean)
+                            return true
+                        }
+                    }
+
+                    if (homographGuardEnabled) {
+                        val homograph = HomographAndPhishingGuard.inspectUrl(candidateUrl, tab.id)
+                        if (homograph != null) {
+                            val cleanAscii = homograph.asciiHost.lowercase().removePrefix("www.")
+                            if (!bypassedHomographHosts.contains(cleanAscii)) {
+                                callbacks?.onHomographDetected(homograph)
+                                return true
+                            }
+                        }
+                    }
+
+                    if (shieldsEngine.isMaliciousUrl(candidateUrl)) {
+                        val host = request.url.host ?: candidateUrl
+                        callbacks?.onMaliciousNavigationBlocked(tab.id, candidateUrl, host)
+                        return true
+                    }
+
+                    val upgraded = shieldsEngine.maybeUpgradeToHttps(candidateUrl, view?.url?.let { Uri.parse(it).host })
+                    if (upgraded != candidateUrl) {
+                        callbacks?.onHttpsUpgraded(tab.id, request.url.host ?: "")
                         view?.loadUrl(upgraded)
                         return true
                     }
@@ -279,6 +612,15 @@ class WebViewManager(
 
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     if (!url.isNullOrBlank()) {
+                        val newHost = runCatching { Uri.parse(url).host }.getOrNull()
+                            ?.lowercase()?.removePrefix("www.") ?: ""
+                        val prevHost = tabLastHost[tab.id]
+                        if (!prevHost.isNullOrBlank() && newHost.isNotBlank() && prevHost != newHost) {
+                            if (tabTemporaryPermissions.remove(tab.id) != null) {
+                                callbacks?.onTemporaryGrantsCleared(tab.id)
+                            }
+                        }
+                        if (newHost.isNotBlank()) tabLastHost[tab.id] = newHost
                         callbacks?.onPageStarted(tab.id, url)
                     }
                 }
@@ -287,12 +629,16 @@ class WebViewManager(
                     super.onPageCommitVisible(view, url)
                     injectDesktopViewportIfEnabled(view, tab.id)
                     injectShieldScriptsIfEnabled(view, url)
+                    injectMediaAndKeepAliveScript(view)
                 }
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     injectDesktopViewportIfEnabled(view, tab.id)
                     injectShieldScriptsIfEnabled(view, url)
+                    injectMediaAndKeepAliveScript(view)
+                    injectMatchingUserscripts(view, url)
                     detectMediaElements(view, tab.id)
+                    detectRssFeed(view, tab.id)
                     if (!url.isNullOrBlank()) {
                         callbacks?.onPageFinished(
                             tabId = tab.id,
@@ -380,11 +726,23 @@ class WebViewManager(
         desktopModeByTab[tab.id] = tab.isDesktopMode
         zoomByTab[tab.id] = tab.zoomPercent
         applyDesktopUserAgent(webView, tab.isDesktopMode, tab.zoomPercent)
-        val shouldDark = shieldsEngine.shouldForceDarkForDomain(tab.domain)
-        applyNativeForceDark(webView, shouldDark)
+        applyNativeForceDark(webView, false)
+        val targetCacheMode = resolveCacheMode(
+            isPrivate = tab.isPrivate,
+            isOnline = com.example.services.RitamCacheManager.isOnline(context)
+        )
+        if (webView.settings.cacheMode != targetCacheMode) {
+            webView.settings.cacheMode = targetCacheMode
+        }
         val cookieManager = CookieManager.getInstance()
         cookieManager.setAcceptCookie(!tab.isPrivate)
         cookieManager.setAcceptThirdPartyCookies(webView, !tab.isPrivate && !blockThirdPartyCookies)
+    }
+
+    private fun resolveCacheMode(isPrivate: Boolean, isOnline: Boolean): Int = when {
+        isPrivate -> WebSettings.LOAD_NO_CACHE
+        isOnline -> WebSettings.LOAD_DEFAULT
+        else -> WebSettings.LOAD_CACHE_ELSE_NETWORK
     }
 
     fun setDesktopMode(tabId: String, desktopMode: Boolean, reloadIfLoaded: Boolean) {
@@ -421,8 +779,16 @@ class WebViewManager(
     fun applyForceDarkNow(tabId: String, domain: String) {
         val webView = liveWebViews[tabId] ?: return
         val enabled = shieldsEngine.shouldForceDarkForDomain(domain)
-        applyNativeForceDark(webView, enabled)
+        applyNativeForceDark(webView, false)
         webView.evaluateJavascript(shieldsEngine.forceWebDarkScript(enabled), null)
+    }
+
+    fun applyForceDarkToAllOpenTabs(tabs: List<TabState>) {
+        tabs.forEach { tab ->
+            if (!tab.isHome && liveWebViews.containsKey(tab.id)) {
+                applyForceDarkNow(tab.id, tab.domain)
+            }
+        }
     }
 
     private fun applyNativeForceDark(webView: WebView, enabled: Boolean) {
@@ -547,8 +913,21 @@ class WebViewManager(
     private fun injectShieldScriptsIfEnabled(webView: WebView?, url: String?) {
         if (webView == null || url.isNullOrBlank()) return
         val host = runCatching { Uri.parse(url).host }.getOrNull() ?: ""
+        if (strictReferrerPolicyEnabled) {
+            webView.evaluateJavascript(shieldsEngine.strictReferrerScript(), null)
+        }
+        if (blockWebRtcLeaksEnabled) {
+            webView.evaluateJavascript(shieldsEngine.webRtcLeakBlockerScript(), null)
+        }
+        if (lockdownCovertApisEnabled) {
+            webView.evaluateJavascript(shieldsEngine.covertApiLockdownScript(), null)
+        }
+        if (fingerprintRandomizerEnabled) {
+            webView.evaluateJavascript(shieldsEngine.fingerprintRandomizerScript(), null)
+        }
+        webView.evaluateJavascript(shieldsEngine.clipboardGuardScript(), null)
         if (shieldsEngine.shouldApplyCosmeticAdBlocker(host)) {
-            webView.evaluateJavascript(shieldsEngine.cosmeticAdBlockerScript(), null)
+            webView.evaluateJavascript(shieldsEngine.cosmeticAdBlockerScript(host), null)
         }
         if (shieldsEngine.shouldBlockCookieBanners(host)) {
             webView.evaluateJavascript(shieldsEngine.cookieConsentBlockerScript(), null)
@@ -557,6 +936,198 @@ class WebViewManager(
         if (forceDark) {
             webView.evaluateJavascript(shieldsEngine.forceWebDarkScript(true), null)
         }
+    }
+
+    private fun injectMediaAndKeepAliveScript(webView: WebView?) {
+        webView?.evaluateJavascript(
+            """
+            (function() {
+                try {
+                    if (window.__ritamKeepAliveInstalled) return;
+                    window.__ritamKeepAliveInstalled = true;
+
+                    // Keep Page Visibility API reporting visible so background tabs & PiP never auto-pause
+                    try {
+                        Object.defineProperty(document, 'hidden', { configurable: true, get: function() { return false; } });
+                        Object.defineProperty(document, 'visibilityState', { configurable: true, get: function() { return 'visible'; } });
+                        Object.defineProperty(document, 'webkitHidden', { configurable: true, get: function() { return false; } });
+                    } catch (e) {}
+
+                    document.addEventListener('visibilitychange', function(e) {
+                        e.stopImmediatePropagation();
+                    }, true);
+                    window.addEventListener('visibilitychange', function(e) {
+                        e.stopImmediatePropagation();
+                    }, true);
+
+                    function reportMediaState() {
+                        try {
+                            var media = document.querySelectorAll('video, audio');
+                            var playing = false;
+                            for (var i = 0; i < media.length; i++) {
+                                if (!media[i].paused && !media[i].ended) { playing = true; break; }
+                            }
+                            if (window.RitamBridge && window.RitamBridge.onMediaStateChanged) {
+                                window.RitamBridge.onMediaStateChanged(media.length > 0, playing);
+                            }
+                        } catch (e) {}
+                    }
+
+                    ['play', 'playing', 'pause', 'ended', 'emptied', 'loadedmetadata'].forEach(function(evt) {
+                        document.addEventListener(evt, function(e) {
+                            // Recover automatically if system/WebView paused video during PiP entry transition
+                            if (evt === 'pause' && e && e.target && (e.target.tagName === 'VIDEO' || e.target.tagName === 'AUDIO')) {
+                                var now = Date.now();
+                                var userInitiated = window.__ritamUserMediaActionAt && (now - window.__ritamUserMediaActionAt) < 800;
+                                if (!userInitiated && window.__ritamPipGuardUntil && now < window.__ritamPipGuardUntil && !e.target.ended) {
+                                    setTimeout(function() {
+                                        if (e.target.paused && !e.target.ended) {
+                                            e.target.play().catch(function(){});
+                                        }
+                                    }, 60);
+                                }
+                            }
+                            reportMediaState();
+                        }, true);
+                    });
+
+                    // Track explicit user taps/clicks on media controls so intentional pauses are respected
+                    document.addEventListener('pointerdown', function() {
+                        window.__ritamUserMediaActionAt = Date.now();
+                    }, true);
+
+                    if (document.body) {
+                        var moTimer = null;
+                        var mo = new MutationObserver(function() {
+                            if (moTimer) return;
+                            moTimer = setTimeout(function() {
+                                moTimer = null;
+                                reportMediaState();
+                            }, 500);
+                        });
+                        mo.observe(document.body, { childList: true, subtree: true });
+                    }
+                    reportMediaState();
+                } catch (e) {}
+            })();
+            """.trimIndent(),
+            null
+        )
+    }
+
+    private fun injectMatchingUserscripts(webView: WebView?, url: String?) {
+        if (!userscriptsEnabled || webView == null || url.isNullOrBlank()) return
+        val scripts = activeUserscripts.filter { it.enabled && matchesUrlPattern(url, it.urlPattern) }
+        scripts.forEach { script ->
+            if (script.isCss) {
+                val escaped = script.code.replace("\\", "\\\\").replace("'", "\\'").replace("\n", " ")
+                webView.evaluateJavascript(
+                    """
+                    (function(){
+                        try {
+                            var s = document.createElement('style');
+                            s.setAttribute('data-ritam-script', '${script.id}');
+                            s.textContent = '$escaped';
+                            (document.head || document.documentElement).appendChild(s);
+                        } catch (e) {}
+                    })();
+                    """.trimIndent(),
+                    null
+                )
+            } else {
+                webView.evaluateJavascript("(function(){ try { ${script.code} } catch (e) {} })();", null)
+            }
+        }
+    }
+
+    private fun matchesUrlPattern(url: String, pattern: String): Boolean {
+        val clean = pattern.trim()
+        if (clean.isEmpty() || clean == "*") return true
+        val regexStr = clean.split("*").joinToString(".*") { Regex.escape(it) }
+        return runCatching { Regex(regexStr, RegexOption.IGNORE_CASE).containsMatchIn(url) }.getOrDefault(false)
+    }
+
+    private fun detectRssFeed(webView: WebView?, tabId: String) {
+        webView?.evaluateJavascript(shieldsEngine.feedDiscoveryScript()) { raw ->
+            val feedUrl = unquoteJsString(raw).trim().takeIf { it.startsWith("http") }
+            callbacks?.onFeedDiscovered(tabId, feedUrl)
+        }
+    }
+
+    fun enableElementPicker(tabId: String) {
+        liveWebViews[tabId]?.evaluateJavascript(shieldsEngine.elementPickerScript(), null)
+    }
+
+    fun reapplyCosmeticRulesNow(tabId: String, domain: String) {
+        liveWebViews[tabId]?.evaluateJavascript(shieldsEngine.cosmeticAdBlockerScript(domain), null)
+    }
+
+    fun setMediaSpeedAndBoost(tabId: String, speed: Float, boost: Float) {
+        liveWebViews[tabId]?.evaluateJavascript(shieldsEngine.mediaSpeedBoostScript(speed, boost), null)
+    }
+
+    fun extractSelectedText(tabId: String, onText: (String) -> Unit) {
+        val wv = liveWebViews[tabId]
+        if (wv == null) {
+            onText("")
+            return
+        }
+        wv.evaluateJavascript(shieldsEngine.selectedTextScript()) { raw ->
+            onText(unquoteJsString(raw).trim())
+        }
+    }
+
+    fun captureFullPageBitmap(tabId: String, onBitmap: (Bitmap?) -> Unit) {
+        val wv = liveWebViews[tabId]
+        if (wv == null || wv.width <= 0 || wv.height <= 0) {
+            onBitmap(null)
+            return
+        }
+        val bitmap = try {
+            @Suppress("DEPRECATION")
+            val scaledHeight = (wv.contentHeight * wv.scale).toInt()
+                .coerceIn(wv.height, 14_000)
+            val bmp = Bitmap.createBitmap(wv.width, scaledHeight, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bmp)
+            wv.draw(canvas)
+            bmp
+        } catch (_: Throwable) {
+            null
+        }
+        onBitmap(bitmap)
+    }
+
+    fun clearOriginSiteData(domain: String) {
+        val clean = domain.trim().lowercase().removePrefix("www.")
+        if (clean.isBlank()) return
+        runCatching {
+            val storage = WebStorage.getInstance()
+            storage.deleteOrigin("https://$clean")
+            storage.deleteOrigin("http://$clean")
+            storage.deleteOrigin("https://www.$clean")
+            val cm = CookieManager.getInstance()
+            listOf("https://$clean", "https://www.$clean", "http://$clean").forEach { originUrl ->
+                val rawCookies = cm.getCookie(originUrl)
+                rawCookies?.split(";")?.forEach { pair ->
+                    val name = pair.substringBefore("=").trim()
+                    if (name.isNotBlank()) {
+                        cm.setCookie(originUrl, "$name=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/")
+                    }
+                }
+            }
+            cm.flush()
+        }
+    }
+
+    private fun unquoteJsString(raw: String?): String {
+        if (raw == null || raw == "null") return ""
+        return runCatching {
+            if (raw.startsWith("\"") && raw.endsWith("\"")) {
+                JSONObject("{\"v\":$raw}").getString("v")
+            } else {
+                raw
+            }
+        }.getOrDefault("")
     }
 
     private fun detectMediaElements(webView: WebView?, tabId: String) {
@@ -579,6 +1150,7 @@ class WebViewManager(
                 val obj = JSONObject(cleaned)
                 val count = obj.optInt("count", 0)
                 val playing = obj.optBoolean("playing", false)
+                if (playing) playingMediaTabs.add(tabId) else playingMediaTabs.remove(tabId)
                 callbacks?.onMediaPlaybackDetected(tabId, count > 0, playing)
             }
         }
@@ -588,9 +1160,10 @@ class WebViewManager(
         liveWebViews[tabId]?.evaluateJavascript(
             """
             (function() {
+                window.__ritamUserMediaActionAt = Date.now();
                 var media = document.querySelectorAll('video, audio');
                 for (var i = 0; i < media.length; i++) {
-                    if (media[i].paused) media[i].play(); else media[i].pause();
+                    if (media[i].paused) media[i].play().catch(function(){}); else media[i].pause();
                 }
             })();
             """.trimIndent(),
@@ -599,9 +1172,10 @@ class WebViewManager(
     }
 
     fun pauseAllMedia() {
+        playingMediaTabs.clear()
         liveWebViews.values.forEach { wv ->
             wv.evaluateJavascript(
-                "document.querySelectorAll('video, audio').forEach(function(m){ m.pause(); });",
+                "window.__ritamUserMediaActionAt = Date.now(); document.querySelectorAll('video, audio').forEach(function(m){ m.pause(); });",
                 null
             )
         }
@@ -914,6 +1488,10 @@ class WebViewManager(
         desktopModeByTab.remove(tabId)
         zoomByTab.remove(tabId)
         pendingUrls.remove(tabId)
+        tabTemporaryPermissions.remove(tabId)
+        tabLastHost.remove(tabId)
+        playingMediaTabs.remove(tabId)
+        pinnedTabIds.remove(tabId)
         liveWebViews.remove(tabId)?.let { webView ->
             if (wasPrivate) {
                 webView.clearCache(true)

@@ -80,17 +80,28 @@ object DownloadCategory {
         return when {
             lowerMime.startsWith("audio/") || lowerMime.startsWith("video/") ||
                 lowerName.endsWith(".mp3") || lowerName.endsWith(".flac") ||
-                lowerName.endsWith(".mp4") || lowerName.endsWith(".wav") -> MEDIA
+                lowerName.endsWith(".mp4") || lowerName.endsWith(".wav") ||
+                lowerName.endsWith(".mkv") || lowerName.endsWith(".webm") ||
+                lowerName.endsWith(".mov") || lowerName.endsWith(".m4a") ||
+                lowerName.endsWith(".aac") || lowerName.endsWith(".ogg") -> MEDIA
             lowerMime.startsWith("image/") || lowerName.endsWith(".png") ||
                 lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") ||
-                lowerName.endsWith(".webp") || lowerName.endsWith(".svg") -> IMAGES
+                lowerName.endsWith(".webp") || lowerName.endsWith(".gif") ||
+                lowerName.endsWith(".bmp") || lowerName.endsWith(".svg") -> IMAGES
             lowerName.endsWith(".zip") || lowerName.endsWith(".tar") ||
                 lowerName.endsWith(".gz") || lowerName.endsWith(".7z") ||
                 lowerName.endsWith(".rar") || lowerMime.contains("zip") -> ARCHIVES
             lowerMime.contains("pdf") || lowerMime.startsWith("text/") ||
+                lowerMime.contains("word") || lowerMime.contains("powerpoint") ||
+                lowerMime.contains("presentation") || lowerMime.contains("spreadsheet") ||
+                lowerMime.contains("excel") ||
                 lowerName.endsWith(".pdf") || lowerName.endsWith(".json") ||
-                lowerName.endsWith(".md") || lowerName.endsWith(".txt") ||
-                lowerName.endsWith(".html") -> DOCUMENTS
+                lowerName.endsWith(".md") || lowerName.endsWith(".markdown") ||
+                lowerName.endsWith(".txt") || lowerName.endsWith(".html") ||
+                lowerName.endsWith(".doc") || lowerName.endsWith(".docx") ||
+                lowerName.endsWith(".ppt") || lowerName.endsWith(".pptx") ||
+                lowerName.endsWith(".xls") || lowerName.endsWith(".xlsx") ||
+                lowerName.endsWith(".csv") -> DOCUMENTS
             else -> OTHER
         }
     }
@@ -106,6 +117,10 @@ data class WebsiteSettingsEntity(
     val httpsOnly: Boolean = true,
     val zoomPercent: Int = 100,
     val forceDarkOverride: Int = -1, // -1 = Follow global, 0 = Off, 1 = On
+    val isEphemeralContainer: Boolean = false,
+    val cameraPermission: Int = 0, // 0 = Ask, 1 = Always Allow, -1 = Always Block
+    val micPermission: Int = 0,
+    val locationPermission: Int = 0,
     val updatedAt: Long = System.currentTimeMillis()
 )
 
@@ -175,4 +190,97 @@ data class VaultEntryEntity(
     val secretValue: String,
     val category: String = "Login", // "Login", "ApiKey", "Passkey"
     val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "userscripts")
+data class UserscriptEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val urlPattern: String = "*",
+    val code: String,
+    val isCss: Boolean = false,
+    val enabled: Boolean = true,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(
+    tableName = "watchlist_items",
+    indices = [Index(value = ["url"], unique = true)]
+)
+data class WatchlistItemEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val url: String,
+    val title: String,
+    val domain: String,
+    val lastContentHash: String = "",
+    val lastCheckedAt: Long = System.currentTimeMillis(),
+    val hasUnreadChange: Boolean = false,
+    val checkIntervalHours: Int = 24
+)
+
+@Entity(
+    tableName = "highlights",
+    indices = [Index(value = ["url"]), Index(value = ["createdAt"])]
+)
+data class HighlightEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val url: String,
+    val domain: String,
+    val title: String,
+    val quoteText: String,
+    val note: String = "",
+    val colorHex: String = "#91D5AE",
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(
+    tableName = "rss_feeds",
+    indices = [Index(value = ["feedUrl"], unique = true)]
+)
+data class RssFeedEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    val feedUrl: String,
+    val siteUrl: String = "",
+    val lastSyncedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(
+    tableName = "rss_articles",
+    indices = [Index(value = ["feedId"]), Index(value = ["link"], unique = true)]
+)
+data class RssArticleEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val feedId: Long,
+    val feedTitle: String,
+    val title: String,
+    val link: String,
+    val summary: String = "",
+    val publishedLabel: String = "",
+    val isRead: Boolean = false,
+    val fetchedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(
+    tableName = "site_usage",
+    indices = [Index(value = ["domain"], unique = true), Index(value = ["visitCount"])]
+)
+data class SiteUsageEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val domain: String,
+    val url: String,
+    val title: String,
+    val visitCount: Long = 1L,
+    val lastVisitedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(
+    tableName = "quick_control_usage",
+    indices = [Index(value = ["controlId"], unique = true)]
+)
+data class QuickControlUsageEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val controlId: String,
+    val usageCount: Long = 1L,
+    val lastUsedAt: Long = System.currentTimeMillis()
 )

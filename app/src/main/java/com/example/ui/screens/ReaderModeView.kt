@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,7 +22,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkAdd
+import androidx.compose.material.icons.rounded.CenterFocusStrong
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -50,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.browser.ReaderArticle
+import com.example.services.StructuredViewerHelper
 import com.example.ui.theme.LocalRitamExtendedColors
 import com.example.ui.theme.NewsreaderFamily
 
@@ -62,7 +66,14 @@ fun ReaderModeView(
     onBookmarkArticle: () -> Unit,
     onOrganizeBookmarks: () -> Unit,
     onExitReader: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    bionicReadingEnabled: Boolean = false,
+    columnWidthDp: Int = 640,
+    lineHeightMultiplier: Float = 1.62f,
+    onToggleBionicReading: () -> Unit = {},
+    onAdjustColumnWidth: (Int) -> Unit = {},
+    onAdjustLineHeight: (Float) -> Unit = {},
+    onSaveHighlight: () -> Unit = {}
 ) {
     val ext = LocalRitamExtendedColors.current
     val scrollState = rememberScrollState()
@@ -91,13 +102,16 @@ fun ReaderModeView(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp),
+                .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState())
             ) {
                 Surface(
                     onClick = { onAdjustFontSize(-1) },
@@ -126,7 +140,87 @@ fun ReaderModeView(
                         Text("A+", style = MaterialTheme.typography.labelMedium)
                     }
                 }
+                Surface(
+                    onClick = onToggleBionicReading,
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (bionicReadingEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else ext.surfaceLow,
+                    border = BorderStroke(1.dp, if (bionicReadingEnabled) MaterialTheme.colorScheme.primary else ext.cardBorder),
+                    modifier = Modifier.height(34.dp).testTag("reader_focus_toggle")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.CenterFocusStrong,
+                            contentDescription = "Focus Fixation Reading",
+                            tint = if (bionicReadingEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            "Focus",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (bionicReadingEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+                val nextWidth = when {
+                    columnWidthDp <= 540 -> 640
+                    columnWidthDp <= 680 -> 760
+                    else -> 520
+                }
+                val widthLabel = when {
+                    columnWidthDp <= 540 -> "Narrow"
+                    columnWidthDp <= 680 -> "Medium"
+                    else -> "Wide"
+                }
+                Surface(
+                    onClick = { onAdjustColumnWidth(nextWidth) },
+                    shape = RoundedCornerShape(8.dp),
+                    color = ext.surfaceLow,
+                    border = BorderStroke(1.dp, ext.cardBorder),
+                    modifier = Modifier.height(34.dp)
+                ) {
+                    Box(Modifier.padding(horizontal = 9.dp), contentAlignment = Alignment.Center) {
+                        Text("W: $widthLabel", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                val nextLine = when {
+                    lineHeightMultiplier < 1.52f -> 1.62f
+                    lineHeightMultiplier < 1.75f -> 1.85f
+                    else -> 1.45f
+                }
+                Surface(
+                    onClick = { onAdjustLineHeight(nextLine) },
+                    shape = RoundedCornerShape(8.dp),
+                    color = ext.surfaceLow,
+                    border = BorderStroke(1.dp, ext.cardBorder),
+                    modifier = Modifier.height(34.dp)
+                ) {
+                    Box(Modifier.padding(horizontal = 9.dp), contentAlignment = Alignment.Center) {
+                        Text("${String.format("%.2f", lineHeightMultiplier)}x", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                Surface(
+                    onClick = onSaveHighlight,
+                    shape = RoundedCornerShape(8.dp),
+                    color = ext.surfaceLow,
+                    border = BorderStroke(1.dp, ext.cardBorder),
+                    modifier = Modifier.height(34.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(Icons.Rounded.EditNote, contentDescription = "Save highlight", modifier = Modifier.size(14.dp))
+                        Text("Note", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
             }
+
+            Spacer(Modifier.width(6.dp))
 
             Surface(
                 onClick = onExitReader,
@@ -143,7 +237,7 @@ fun ReaderModeView(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Icon(Icons.Rounded.Close, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Text("Exit Reader", style = MaterialTheme.typography.labelSmall)
+                    Text("Exit", style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
@@ -157,7 +251,7 @@ fun ReaderModeView(
         ) {
             Column(
                 modifier = Modifier
-                    .widthIn(max = 640.dp)
+                    .widthIn(max = columnWidthDp.coerceIn(480, 820).dp)
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 10.dp)
             ) {
@@ -309,9 +403,23 @@ fun ReaderModeView(
 
                 Spacer(Modifier.height(18.dp))
 
-                // Paragraphs with Drop Cap on first paragraph
+                // Paragraphs with Drop Cap or Focus Fixation Reading
                 article.paragraphs.forEachIndexed { index, para ->
-                    if (index == 0 && para.length > 1) {
+                    val effectiveLineHeight = (fontSizeSp * lineHeightMultiplier.coerceIn(1.35f, 2.0f)).sp
+                    if (bionicReadingEnabled) {
+                        val fixation = remember(para) {
+                            StructuredViewerHelper.buildFixationAnnotatedString(para)
+                        }
+                        Text(
+                            text = fixation,
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontFamily = NewsreaderFamily,
+                                fontSize = fontSizeSp.sp,
+                                lineHeight = effectiveLineHeight
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    } else if (index == 0 && para.length > 1) {
                         val annotated = buildAnnotatedString {
                             withStyle(
                                 SpanStyle(
@@ -330,7 +438,7 @@ fun ReaderModeView(
                             style = MaterialTheme.typography.bodyLarge.copy(
                                 fontFamily = NewsreaderFamily,
                                 fontSize = fontSizeSp.sp,
-                                lineHeight = (fontSizeSp * 1.62f).sp
+                                lineHeight = effectiveLineHeight
                             ),
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -340,7 +448,7 @@ fun ReaderModeView(
                             style = MaterialTheme.typography.bodyLarge.copy(
                                 fontFamily = NewsreaderFamily,
                                 fontSize = fontSizeSp.sp,
-                                lineHeight = (fontSizeSp * 1.62f).sp
+                                lineHeight = effectiveLineHeight
                             ),
                             color = MaterialTheme.colorScheme.onSurface
                         )

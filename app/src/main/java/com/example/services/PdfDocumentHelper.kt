@@ -7,10 +7,8 @@ import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
-import java.util.concurrent.TimeUnit
 
 data class PdfViewerState(
     val title: String,
@@ -22,25 +20,20 @@ data class PdfViewerState(
 )
 
 object PdfDocumentHelper {
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(12, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
-        .build()
-
     suspend fun downloadRemotePdfToCache(
         context: Context,
         url: String,
         filenameHint: String
     ): File? = withContext(Dispatchers.IO) {
         runCatching {
-            val dir = File(context.cacheDir, "pdfs").apply { mkdirs() }
+            val dir = RitamCacheManager.pdfCacheDir(context)
             val safeName = filenameHint
                 .ifBlank { "document.pdf" }
                 .replace(Regex("[^a-zA-Z0-9._-]"), "_")
                 .let { if (it.endsWith(".pdf", true)) it else "$it.pdf" }
             val outFile = File(dir, safeName)
             val request = Request.Builder().url(url).build()
-            client.newCall(request).execute().use { resp ->
+            RitamCacheManager.sharedHttpClient(context).newCall(request).execute().use { resp ->
                 if (!resp.isSuccessful) return@runCatching null
                 val body = resp.body ?: return@runCatching null
                 outFile.outputStream().use { out ->

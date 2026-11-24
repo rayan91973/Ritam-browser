@@ -120,6 +120,54 @@ class RitamNotificationManager(private val context: Context) {
         NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_READ_ALOUD)
     }
 
+    @SuppressLint("MissingPermission")
+    fun notifyWatchlistChanged(title: String, domain: String): Boolean {
+        if (!hasNotificationPermission()) return false
+        val notification = NotificationCompat.Builder(context, CHANNEL_ALERTS)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("Watchlist Page Updated")
+            .setContentText("$title ($domain) has new content changes.")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(launchAppIntent(205))
+            .build()
+        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_WATCHLIST, notification)
+        return true
+    }
+
+    @SuppressLint("MissingPermission")
+    fun notifyMediaPlayback(title: String, domain: String, isPlaying: Boolean) {
+        if (!hasNotificationPermission()) return
+        val toggleIntent = PendingIntent.getBroadcast(
+            context,
+            210,
+            Intent(MediaSessionHelper.ACTION_MEDIA_TOGGLE).setPackage(context.packageName),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val stopIntent = PendingIntent.getBroadcast(
+            context,
+            211,
+            Intent(MediaSessionHelper.ACTION_MEDIA_STOP).setPackage(context.packageName),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_ALERTS)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(title)
+            .setContentText(domain)
+            .setOngoing(isPlaying)
+            .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .addAction(0, if (isPlaying) "Pause" else "Play", toggleIntent)
+            .addAction(0, "Stop", stopIntent)
+            .setContentIntent(launchAppIntent(206))
+            .build()
+        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_MEDIA_SESSION, notification)
+    }
+
+    fun cancelMediaPlaybackNotification() {
+        NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_MEDIA_SESSION)
+    }
+
     private fun launchAppIntent(requestCode: Int): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -140,5 +188,7 @@ class RitamNotificationManager(private val context: Context) {
         private const val NOTIFICATION_ID_DOWNLOAD = 3002
         private const val NOTIFICATION_ID_SHIELD_ALERT = 3003
         private const val NOTIFICATION_ID_READ_ALOUD = 3004
+        private const val NOTIFICATION_ID_WATCHLIST = 3005
+        private const val NOTIFICATION_ID_MEDIA_SESSION = 3006
     }
 }

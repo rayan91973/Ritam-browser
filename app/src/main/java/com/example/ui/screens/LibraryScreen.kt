@@ -28,30 +28,43 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AudioFile
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.DesktopWindows
+import androidx.compose.material.icons.rounded.DoneAll
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
-import androidx.compose.material.icons.rounded.DoneAll
 import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PictureAsPdf
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.Queue
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.RssFeed
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Slideshow
 import androidx.compose.material.icons.rounded.Storage
+import androidx.compose.material.icons.rounded.TableChart
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.VideoFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -79,24 +92,28 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.example.data.local.BookmarkEntity
 import com.example.data.local.BookmarkFolderEntity
 import com.example.data.local.DownloadCategory
 import com.example.data.local.DownloadEntity
 import com.example.data.local.DownloadStatus
+import com.example.data.local.HighlightEntity
 import com.example.data.local.HistoryEntity
 import com.example.data.local.ReadingListItemEntity
+import com.example.data.local.RssArticleEntity
+import com.example.data.local.RssFeedEntity
 import com.example.data.preferences.BrowserPreferences
 import com.example.services.StorageStats
-import com.example.ui.components.RITAM_AVATAR_URL
+import com.example.services.UniversalFileType
+import com.example.services.UniversalViewerHelper
 import com.example.ui.components.formatBytes
 import com.example.ui.components.formatRelativeTime
 import com.example.ui.theme.LocalRitamExtendedColors
@@ -108,7 +125,9 @@ enum class LibraryTab(val label: String) {
     HISTORY("History"),
     DOWNLOADS("Downloads"),
     BOOKMARKS("Bookmarks"),
-    READING_LIST("Read Later")
+    READING_LIST("Read Later"),
+    FEEDS("Feeds"),
+    HIGHLIGHTS("Highlights")
 }
 
 @Composable
@@ -147,7 +166,20 @@ fun LibraryScreen(
     readingList: List<ReadingListItemEntity> = emptyList(),
     onToggleReadLaterDone: (Long, Boolean) -> Unit = { _, _ -> },
     onDeleteReadLater: (Long) -> Unit = {},
-    onClearReadLaterDone: () -> Unit = {}
+    onClearReadLaterDone: () -> Unit = {},
+    activeDownloadSpeeds: Map<Long, Long> = emptyMap(),
+    onPauseDownload: (DownloadEntity) -> Unit = {},
+    onResumeDownload: (DownloadEntity) -> Unit = {},
+    rssFeeds: List<RssFeedEntity> = emptyList(),
+    rssArticles: List<RssArticleEntity> = emptyList(),
+    onSubscribeFeed: (String) -> Unit = {},
+    onRefreshFeeds: () -> Unit = {},
+    onToggleFeedArticleRead: (Long, Boolean) -> Unit = { _, _ -> },
+    onDeleteFeed: (Long) -> Unit = {},
+    highlights: List<HighlightEntity> = emptyList(),
+    onDeleteHighlight: (Long) -> Unit = {},
+    onExportHighlightsUri: (android.net.Uri) -> Unit = {},
+    onOpenLocalFile: (android.net.Uri) -> Unit = {}
 ) {
     val context = LocalContext.current
     val ext = LocalRitamExtendedColors.current
@@ -167,6 +199,14 @@ fun LibraryScreen(
         ActivityResultContracts.CreateDocument("text/markdown")
     ) { uri -> uri?.let(onExportHistoryUri) }
 
+    val exportHighlightsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/markdown")
+    ) { uri -> uri?.let(onExportHighlightsUri) }
+
+    val openLocalFileLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> uri?.let(onOpenLocalFile) }
+
     LaunchedEffect(Unit) { onRefreshStorage() }
 
     Column(
@@ -176,24 +216,28 @@ fun LibraryScreen(
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        // Top App Bar
+        // Compact Top App Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
+                .padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(
                     onClick = onBack,
-                    modifier = Modifier.size(48.dp).testTag("library_back_button")
+                    modifier = Modifier.size(40.dp).testTag("library_back_button")
                 ) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back to Browser")
+                    Icon(
+                        Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back to Browser",
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
                 Text(
                     text = "Library & Controls",
-                    style = MaterialTheme.typography.headlineSmall.copy(
+                    style = MaterialTheme.typography.titleLarge.copy(
                         fontFamily = NewsreaderFamily,
                         fontWeight = FontWeight.Medium
                     )
@@ -202,30 +246,15 @@ fun LibraryScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(
                     onClick = { showSearchBar = !showSearchBar },
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier.size(38.dp)
                 ) {
-                    Icon(Icons.Rounded.Search, contentDescription = "Filter library")
+                    Icon(Icons.Rounded.Search, contentDescription = "Filter library", modifier = Modifier.size(19.dp))
                 }
                 IconButton(
                     onClick = onOpenSettings,
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier.size(38.dp)
                 ) {
-                    Icon(Icons.Rounded.Tune, contentDescription = "Open Settings")
-                }
-                Surface(
-                    onClick = onOpenSettings,
-                    shape = CircleShape,
-                    border = BorderStroke(1.dp, ext.cardBorder),
-                    modifier = Modifier
-                        .padding(end = 8.dp)
-                        .size(34.dp)
-                ) {
-                    AsyncImage(
-                        model = RITAM_AVATAR_URL,
-                        contentDescription = "Profile",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    Icon(Icons.Rounded.Tune, contentDescription = "Open Settings", modifier = Modifier.size(19.dp))
                 }
             }
         }
@@ -235,23 +264,24 @@ fun LibraryScreen(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 singleLine = true,
-                placeholder = { Text("Search history, downloads & bookmarks…") },
-                leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                placeholder = { Text("Search history, downloads & bookmarks…", style = MaterialTheme.typography.bodySmall) },
+                leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Rounded.Close, contentDescription = "Clear search")
+                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(34.dp)) {
+                            Icon(Icons.Rounded.Close, contentDescription = "Clear search", modifier = Modifier.size(17.dp))
                         }
                     } else {
-                        IconButton(onClick = onVoiceSearch) {
-                            Icon(Icons.Rounded.Mic, contentDescription = "Voice search")
+                        IconButton(onClick = onVoiceSearch, modifier = Modifier.size(34.dp)) {
+                            Icon(Icons.Rounded.Mic, contentDescription = "Voice search", modifier = Modifier.size(17.dp))
                         }
                     }
                 },
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(12.dp),
+                textStyle = MaterialTheme.typography.bodySmall,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .padding(horizontal = 12.dp, vertical = 2.dp)
             )
         }
 
@@ -310,15 +340,19 @@ fun LibraryScreen(
                 downloads = downloads.filter {
                     searchQuery.isBlank() || it.filename.contains(searchQuery, true)
                 },
+                activeDownloadSpeeds = activeDownloadSpeeds,
                 storageStats = storageStats,
                 askWhereToSave = preferences.askWhereToSaveDownloads,
                 downloadDirectoryLabel = preferences.downloadDirectoryLabel,
                 onToggleAskWhereToSave = onToggleAskWhereToSave,
+                onPauseDownload = onPauseDownload,
+                onResumeDownload = onResumeDownload,
                 onCancelDownload = onCancelDownload,
                 onOpenDownload = onOpenDownload,
                 onShareDownload = onShareDownload,
                 onDeleteDownload = onDeleteDownload,
-                onClearCompleted = onClearCompletedDownloads
+                onClearCompleted = onClearCompletedDownloads,
+                onPickLocalFile = { openLocalFileLauncher.launch(arrayOf("*/*")) }
             )
 
             LibraryTab.BOOKMARKS -> BookmarksTabContent(
@@ -345,6 +379,35 @@ fun LibraryScreen(
                 onToggleRead = onToggleReadLaterDone,
                 onDelete = onDeleteReadLater,
                 onClearRead = onClearReadLaterDone
+            )
+
+            LibraryTab.FEEDS -> FeedsTabContent(
+                feeds = rssFeeds,
+                articles = rssArticles.filter {
+                    searchQuery.isBlank() ||
+                        it.title.contains(searchQuery, true) ||
+                        it.feedTitle.contains(searchQuery, true)
+                },
+                onSubscribeFeed = onSubscribeFeed,
+                onRefreshFeeds = onRefreshFeeds,
+                onOpenArticle = { article ->
+                    onToggleFeedArticleRead(article.id, true)
+                    onOpenUrl(article.link)
+                },
+                onToggleArticleRead = onToggleFeedArticleRead,
+                onDeleteFeed = onDeleteFeed
+            )
+
+            LibraryTab.HIGHLIGHTS -> HighlightsTabContent(
+                highlights = highlights.filter {
+                    searchQuery.isBlank() ||
+                        it.quoteText.contains(searchQuery, true) ||
+                        it.note.contains(searchQuery, true) ||
+                        it.title.contains(searchQuery, true)
+                },
+                onOpenUrl = onOpenUrl,
+                onDeleteHighlight = onDeleteHighlight,
+                onExportMarkdown = { exportHighlightsLauncher.launch("ritam_highlights.md") }
             )
         }
     }
@@ -570,7 +633,7 @@ private fun HistoryTabContent(
                         ) {
                             Icon(Icons.Rounded.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                             Column {
-                                Text("Local Sanctuary Vault", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold))
+                                Text("Local History", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold))
                                 Text(
                                     "Stored strictly on-device • Private tabs excluded",
                                     style = MaterialTheme.typography.bodySmall,
@@ -799,15 +862,19 @@ private fun HistoryTabContent(
 @Composable
 private fun DownloadsTabContent(
     downloads: List<DownloadEntity>,
+    activeDownloadSpeeds: Map<Long, Long>,
     storageStats: StorageStats,
     askWhereToSave: Boolean,
     downloadDirectoryLabel: String,
     onToggleAskWhereToSave: (Boolean) -> Unit,
+    onPauseDownload: (DownloadEntity) -> Unit,
+    onResumeDownload: (DownloadEntity) -> Unit,
     onCancelDownload: (DownloadEntity) -> Unit,
     onOpenDownload: (DownloadEntity) -> Unit,
     onShareDownload: (DownloadEntity) -> Unit,
     onDeleteDownload: (DownloadEntity) -> Unit,
-    onClearCompleted: () -> Unit
+    onClearCompleted: () -> Unit,
+    onPickLocalFile: () -> Unit = {}
 ) {
     val ext = LocalRitamExtendedColors.current
     var selectedCategory by remember { mutableStateOf("All") }
@@ -885,15 +952,35 @@ private fun DownloadsTabContent(
                         )
                     }
                     Spacer(Modifier.height(12.dp))
-                    OutlinedButton(
-                        onClick = onClearCompleted,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Rounded.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Clear Completed Records")
+                        Button(
+                            onClick = onPickLocalFile,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f).testTag("open_local_file_button")
+                        ) {
+                            Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Open File")
+                        }
+                        OutlinedButton(
+                            onClick = onClearCompleted,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Rounded.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Clear Done")
+                        }
                     }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "Built-in viewer: Image, Video, Audio, PDF, Word (.doc/.docx), PPT, Excel (.xls/.xlsx/.csv), Markdown",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
@@ -924,6 +1011,8 @@ private fun DownloadsTabContent(
             }
             items(activeDownloads, key = { "act_${it.id}" }) { dl ->
                 val progress = if (dl.totalBytes > 0) (dl.downloadedBytes.toFloat() / dl.totalBytes.toFloat()).coerceIn(0f, 1f) else 0f
+                val speedBps = activeDownloadSpeeds[dl.id] ?: 0L
+                val isPaused = dl.status == DownloadStatus.PAUSED
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = ext.surfaceLow,
@@ -931,7 +1020,30 @@ private fun DownloadsTabContent(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
-                        Text(dl.filename, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                dl.filename,
+                                style = MaterialTheme.typography.titleSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                            ) {
+                                Text(
+                                    text = if (isPaused) "PAUSED" else if (speedBps > 0) "${formatBytes(speedBps)}/s" else "ACTIVE",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
                         Spacer(Modifier.height(4.dp))
                         Text(
                             "${formatBytes(dl.downloadedBytes)} / ${if (dl.totalBytes > 0) formatBytes(dl.totalBytes) else "Unknown"}",
@@ -944,7 +1056,25 @@ private fun DownloadsTabContent(
                             modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp))
                         )
                         Spacer(Modifier.height(10.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                        ) {
+                            if (dl.systemDownloadId < 0) {
+                                if (isPaused) {
+                                    Button(onClick = { onResumeDownload(dl) }) {
+                                        Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Resume")
+                                    }
+                                } else {
+                                    OutlinedButton(onClick = { onPauseDownload(dl) }) {
+                                        Icon(Icons.Rounded.Pause, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Pause")
+                                    }
+                                }
+                            }
                             OutlinedButton(onClick = { onCancelDownload(dl) }) { Text("Cancel") }
                         }
                     }
@@ -972,6 +1102,23 @@ private fun DownloadsTabContent(
             }
         } else {
             items(finishedDownloads, key = { "fin_${it.id}" }) { dl ->
+                val isViewerSupported = remember(dl.filename, dl.mimeType) {
+                    UniversalViewerHelper.isSupportedFilename(dl.filename, dl.mimeType)
+                }
+                val detectedType = remember(dl.filename, dl.mimeType) {
+                    UniversalViewerHelper.classifyType(dl.filename, dl.mimeType)
+                }
+                val fileIcon = if (!isViewerSupported) {
+                    Icons.Rounded.FileDownload
+                } else when (detectedType) {
+                    UniversalFileType.IMAGE -> Icons.Rounded.Image
+                    UniversalFileType.VIDEO -> Icons.Rounded.VideoFile
+                    UniversalFileType.AUDIO -> Icons.Rounded.AudioFile
+                    UniversalFileType.PDF -> Icons.Rounded.PictureAsPdf
+                    UniversalFileType.PPT -> Icons.Rounded.Slideshow
+                    UniversalFileType.EXCEL -> Icons.Rounded.TableChart
+                    UniversalFileType.WORD, UniversalFileType.MARKDOWN, UniversalFileType.TEXT -> Icons.Rounded.Description
+                }
                 Surface(
                     onClick = { onOpenDownload(dl) },
                     shape = RoundedCornerShape(14.dp),
@@ -983,12 +1130,19 @@ private fun DownloadsTabContent(
                         modifier = Modifier.padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Rounded.FileDownload, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Icon(fileIcon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(dl.filename, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(
-                                "${dl.category} • ${formatBytes(dl.totalBytes)} • ${dl.status}",
+                                text = buildString {
+                                    append(dl.category)
+                                    append(" • ")
+                                    append(formatBytes(dl.totalBytes))
+                                    if (isViewerSupported) {
+                                        append(" • ${detectedType.label} Viewer")
+                                    }
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1322,3 +1476,274 @@ private fun ReadingListTabContent(
         }
     }
 }
+
+@Composable
+private fun FeedsTabContent(
+    feeds: List<RssFeedEntity>,
+    articles: List<RssArticleEntity>,
+    onSubscribeFeed: (String) -> Unit,
+    onRefreshFeeds: () -> Unit,
+    onOpenArticle: (RssArticleEntity) -> Unit,
+    onToggleArticleRead: (Long, Boolean) -> Unit,
+    onDeleteFeed: (Long) -> Unit
+) {
+    val ext = LocalRitamExtendedColors.current
+    var feedUrlInput by remember { mutableStateOf("") }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        item {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = ext.surfaceLow,
+                border = BorderStroke(1.dp, ext.cardBorder),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Rounded.RssFeed, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Text("RSS & Atom Reader", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold))
+                        }
+                        OutlinedButton(onClick = onRefreshFeeds, enabled = feeds.isNotEmpty()) {
+                            Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Sync")
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = feedUrlInput,
+                            onValueChange = { feedUrlInput = it },
+                            singleLine = true,
+                            placeholder = { Text("https://example.com/feed.xml") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        Button(onClick = {
+                            if (feedUrlInput.isNotBlank()) {
+                                onSubscribeFeed(feedUrlInput)
+                                feedUrlInput = ""
+                            }
+                        }) {
+                            Text("Follow")
+                        }
+                    }
+                    if (feeds.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            feeds.forEach { feed ->
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { onDeleteFeed(feed.id) },
+                                    label = { Text("${feed.title} ×") }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (articles.isEmpty()) {
+            item {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = ext.surfaceLow,
+                    border = BorderStroke(1.dp, ext.cardBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(22.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(Icons.Rounded.RssFeed, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.height(8.dp))
+                        Text("No feed articles yet", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "Paste any RSS/Atom URL above or tap Follow RSS when browsing a blog.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        } else {
+            items(articles, key = { "rss_${it.id}" }) { article ->
+                Surface(
+                    onClick = { onOpenArticle(article) },
+                    shape = RoundedCornerShape(14.dp),
+                    color = ext.surfaceLow,
+                    border = BorderStroke(1.dp, ext.cardBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = { onToggleArticleRead(article.id, !article.isRead) },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (article.isRead) Icons.Rounded.DoneAll else Icons.Rounded.RadioButtonUnchecked,
+                                contentDescription = if (article.isRead) "Mark unread" else "Mark read",
+                                tint = if (article.isRead) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(Modifier.width(6.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = article.title,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Medium,
+                                    textDecoration = if (article.isRead) TextDecoration.LineThrough else TextDecoration.None
+                                ),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = listOf(article.feedTitle, article.publishedLabel).filter { it.isNotBlank() }.joinToString(" • "),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (article.summary.isNotBlank()) {
+                                Text(
+                                    text = article.summary,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HighlightsTabContent(
+    highlights: List<HighlightEntity>,
+    onOpenUrl: (String) -> Unit,
+    onDeleteHighlight: (Long) -> Unit,
+    onExportMarkdown: () -> Unit
+) {
+    val ext = LocalRitamExtendedColors.current
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${highlights.size} SAVED HIGHLIGHTS",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedButton(onClick = onExportMarkdown, enabled = highlights.isNotEmpty()) {
+                    Icon(Icons.Rounded.FileUpload, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Export Markdown")
+                }
+            }
+        }
+
+        if (highlights.isEmpty()) {
+            item {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = ext.surfaceLow,
+                    border = BorderStroke(1.dp, ext.cardBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(22.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(Icons.Rounded.EditNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.height(8.dp))
+                        Text("No highlights saved yet", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "Select text on any page or tap Note in Reader View to save quotes with private annotations.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        } else {
+            items(highlights, key = { "hl_${it.id}" }) { hl ->
+                val accent = remember(hl.colorHex) {
+                    runCatching { Color(android.graphics.Color.parseColor(hl.colorHex)) }
+                        .getOrDefault(Color(0xFF91D5AE))
+                }
+                Surface(
+                    onClick = { if (hl.url.startsWith("http")) onOpenUrl(hl.url) },
+                    shape = RoundedCornerShape(14.dp),
+                    color = ext.surfaceLow,
+                    border = BorderStroke(1.dp, ext.cardBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(4.dp)
+                                .height(48.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(accent)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = "“${hl.quoteText}”",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontFamily = NewsreaderFamily,
+                                    fontStyle = FontStyle.Italic
+                                )
+                            )
+                            if (hl.note.isNotBlank()) {
+                                Text(
+                                    text = "Note: ${hl.note}",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Text(
+                                text = "${hl.title.ifBlank { hl.domain }} • ${formatRelativeTime(hl.createdAt)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        IconButton(onClick = { onDeleteHighlight(hl.id) }, modifier = Modifier.size(40.dp)) {
+                            Icon(Icons.Rounded.Delete, contentDescription = "Delete highlight", modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

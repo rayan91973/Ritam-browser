@@ -8,6 +8,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.net.Uri
+import android.os.Build
 import android.view.View
 import android.webkit.WebChromeClient
 import androidx.core.content.FileProvider
@@ -19,29 +20,34 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.RitamApplication
 import com.example.browser.ConsoleLogEntry
 import com.example.browser.ExternalAppRequest
+import com.example.browser.HighlightSelectionRequest
 import com.example.browser.MaliciousWarningState
 import com.example.browser.NetworkLogEntry
 import com.example.browser.PageSourceDialogState
 import com.example.browser.ReaderArticle
 import com.example.browser.SanctuaryReaderSamples
 import com.example.browser.SslWarningState
+import com.example.browser.TabPrivacyReport
 import com.example.browser.TabState
 import com.example.browser.WebContextMenuRequest
+import com.example.browser.WebPermissionPromptRequest
 import com.example.browser.WebViewManager
-import com.example.services.PdfDocumentHelper
-import com.example.services.PdfViewerState
-import com.example.services.ReadAloudState
-import com.example.services.TranslationHelper
-import com.example.widget.RitamSearchWidgetProvider
 import com.example.data.local.BookmarkEntity
 import com.example.data.local.BookmarkFolderEntity
 import com.example.data.local.CustomFilterRuleEntity
 import com.example.data.local.DownloadEntity
 import com.example.data.local.FilterListEntity
+import com.example.data.local.HighlightEntity
 import com.example.data.local.HistoryEntity
+import com.example.data.local.QuickControlUsageEntity
 import com.example.data.local.ReadingListItemEntity
+import com.example.data.local.RssArticleEntity
+import com.example.data.local.RssFeedEntity
 import com.example.data.local.SearchHistoryEntity
+import com.example.data.local.SiteUsageEntity
+import com.example.data.local.UserscriptEntity
 import com.example.data.local.VaultEntryEntity
+import com.example.data.local.WatchlistItemEntity
 import com.example.data.local.WebsiteSettingsEntity
 import com.example.data.preferences.AccentTone
 import com.example.data.preferences.BrowserPreferences
@@ -55,10 +61,29 @@ import com.example.data.preferences.ThemePalette
 import com.example.privacy.BlockCategory
 import com.example.privacy.DnsProvider
 import com.example.privacy.DohResolutionResult
+import com.example.privacy.HomographAndPhishingGuard
+import com.example.privacy.HomographWarningState
 import com.example.privacy.SessionShieldMetrics
 import com.example.privacy.UrlCleaner
+import com.example.services.AppCacheStats
+import com.example.services.PdfDocumentHelper
+import com.example.services.PdfViewerState
+import com.example.services.PwaShortcutHelper
+import com.example.services.ReadAloudState
+import com.example.services.RitamCacheManager
+import com.example.services.RssFeedHelper
 import com.example.services.StorageStats
+import com.example.services.StructuredDocType
+import com.example.services.StructuredViewerHelper
+import com.example.services.StructuredViewerState
+import com.example.services.TranslationHelper
+import com.example.services.UniversalFileType
+import com.example.services.UniversalViewerHelper
+import com.example.services.UniversalViewerState
+import com.example.services.WatchlistAndSyncHelper
+import com.example.widget.RitamSearchWidgetProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -68,6 +93,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 
@@ -82,6 +108,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val notificationManager = container.notificationManager
     val readAloudController = container.readAloudController
     val dohResolver = container.dohResolver
+    val mediaSessionHelper = container.mediaSessionHelper
 
     val preferences: StateFlow<BrowserPreferences> = preferencesRepository.preferences
         .stateIn(viewModelScope, SharingStarted.Eagerly, BrowserPreferences())
@@ -96,6 +123,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val history: StateFlow<List<HistoryEntity>> = repository.history
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val topSites: StateFlow<List<SiteUsageEntity>> = repository.topSites
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val quickControlUsage: StateFlow<List<QuickControlUsageEntity>> = repository.quickControlUsage
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val downloads: StateFlow<List<DownloadEntity>> = repository.downloads
@@ -118,6 +151,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val readingList: StateFlow<List<ReadingListItemEntity>> = repository.readingList
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val userscripts: StateFlow<List<UserscriptEntity>> = repository.userscripts
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val watchlistItems: StateFlow<List<WatchlistItemEntity>> = repository.watchlistItems
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val highlights: StateFlow<List<HighlightEntity>> = repository.highlights
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val rssFeeds: StateFlow<List<RssFeedEntity>> = repository.rssFeeds
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val rssArticles: StateFlow<List<RssArticleEntity>> = repository.rssArticles
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val activeDownloadSpeeds: StateFlow<Map<Long, Long>> = downloadManager.activeSpeeds
 
     val adsBlockedTotal: StateFlow<Long> = repository.adsBlockedTotal
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
@@ -187,12 +237,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _pdfViewerState = MutableStateFlow<PdfViewerState?>(null)
     val pdfViewerState: StateFlow<PdfViewerState?> = _pdfViewerState.asStateFlow()
 
+    private val _universalViewerState = MutableStateFlow<UniversalViewerState?>(null)
+    val universalViewerState: StateFlow<UniversalViewerState?> = _universalViewerState.asStateFlow()
+
+    private val _cacheStats = MutableStateFlow(AppCacheStats())
+    val cacheStats: StateFlow<AppCacheStats> = _cacheStats.asStateFlow()
+
     private val _fullscreenVideoView = MutableStateFlow<View?>(null)
     val fullscreenVideoView: StateFlow<View?> = _fullscreenVideoView.asStateFlow()
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
 
     private val _devToolsVisible = MutableStateFlow(false)
     val devToolsVisible: StateFlow<Boolean> = _devToolsVisible.asStateFlow()
+
+    private val _devToolsInitialTab = MutableStateFlow(1)
+    val devToolsInitialTab: StateFlow<Int> = _devToolsInitialTab.asStateFlow()
+
+    private val _devToolsPageSource = MutableStateFlow("")
+    val devToolsPageSource: StateFlow<String> = _devToolsPageSource.asStateFlow()
+
+    private val _cdpFormatState = MutableStateFlow<StructuredViewerState?>(null)
+    val cdpFormatState: StateFlow<StructuredViewerState?> = _cdpFormatState.asStateFlow()
 
     private val _consoleLogs = MutableStateFlow<List<ConsoleLogEntry>>(emptyList())
     val consoleLogs: StateFlow<List<ConsoleLogEntry>> = _consoleLogs.asStateFlow()
@@ -227,12 +292,61 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _dohTestResult = MutableStateFlow<DohResolutionResult?>(null)
     val dohTestResult: StateFlow<DohResolutionResult?> = _dohTestResult.asStateFlow()
 
+    // 19-Feature Power StateFlows
+    private val _splitTabId = MutableStateFlow<String?>(null)
+    val splitTabId: StateFlow<String?> = _splitTabId.asStateFlow()
+
+    val splitTab: StateFlow<TabState?> = combine(_tabs, _splitTabId) { list, id ->
+        if (id == null) null else list.firstOrNull { it.id == id }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    private val _commandPaletteOpen = MutableStateFlow(false)
+    val commandPaletteOpen: StateFlow<Boolean> = _commandPaletteOpen.asStateFlow()
+
+    private val _elementPickerActiveTabId = MutableStateFlow<String?>(null)
+    val elementPickerActiveTabId: StateFlow<String?> = _elementPickerActiveTabId.asStateFlow()
+
+    private val _structuredViewerState = MutableStateFlow<StructuredViewerState?>(null)
+    val structuredViewerState: StateFlow<StructuredViewerState?> = _structuredViewerState.asStateFlow()
+
+    private val _pendingHighlightRequest = MutableStateFlow<HighlightSelectionRequest?>(null)
+    val pendingHighlightRequest: StateFlow<HighlightSelectionRequest?> = _pendingHighlightRequest.asStateFlow()
+
+    private val _userscriptsDialogOpen = MutableStateFlow(false)
+    val userscriptsDialogOpen: StateFlow<Boolean> = _userscriptsDialogOpen.asStateFlow()
+
+    private val _watchlistDialogOpen = MutableStateFlow(false)
+    val watchlistDialogOpen: StateFlow<Boolean> = _watchlistDialogOpen.asStateFlow()
+
+    // 9-Feature Privacy & Security StateFlows
+    private val _homographWarning = MutableStateFlow<HomographWarningState?>(null)
+    val homographWarning: StateFlow<HomographWarningState?> = _homographWarning.asStateFlow()
+
+    private val _webPermissionPrompt = MutableStateFlow<WebPermissionPromptRequest?>(null)
+    val webPermissionPrompt: StateFlow<WebPermissionPromptRequest?> = _webPermissionPrompt.asStateFlow()
+
+    private val _trackerXRayOpen = MutableStateFlow(false)
+    val trackerXRayOpen: StateFlow<Boolean> = _trackerXRayOpen.asStateFlow()
+
+    private var clipboardClearJob: Job? = null
+    private var activeMediaTabId: String? = null
+    private val lastRecordedVisitByTab = HashMap<String, String>()
+
     init {
+        refreshCacheStats()
         var appliedInitialDefaultDesktop = false
         viewModelScope.launch {
             preferences.collect { prefs ->
                 shieldsEngine.updatePreferences(prefs)
                 webViewManager.confirmExternalAppLaunch = prefs.confirmExternalAppLaunch
+                webViewManager.fingerprintRandomizerEnabled = prefs.fingerprintRandomizerEnabled
+                webViewManager.userscriptsEnabled = prefs.userscriptsEnabled
+                webViewManager.unwrapRedirectLinksEnabled = prefs.unwrapRedirectLinksEnabled
+                webViewManager.homographGuardEnabled = prefs.homographGuardEnabled
+                webViewManager.strictReferrerPolicyEnabled = prefs.strictReferrerPolicyEnabled
+                webViewManager.blockWebRtcLeaksEnabled = prefs.blockWebRtcLeaksEnabled
+                webViewManager.lockdownCovertApisEnabled = prefs.lockdownCovertApisEnabled
+                webViewManager.stripTrackingParamsEnabled = prefs.stripTrackingParams
                 downloadManager.setDownloadNotificationsEnabled(
                     prefs.notificationsEnabled && prefs.downloadNotificationsEnabled
                 )
@@ -257,6 +371,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
+        viewModelScope.launch {
+            repository.userscripts.collect { list ->
+                webViewManager.activeUserscripts = list
+            }
+        }
+
+        mediaSessionHelper.setHandlers(
+            onToggle = {
+                val targetId = activeMediaTabId
+                    ?.takeIf { id -> _tabs.value.any { it.id == id && !it.isHome } }
+                    ?: _activeTabId.value
+                toggleTabMediaPlayback(targetId)
+            },
+            onStop = {
+                webViewManager.pauseAllMedia()
+                activeMediaTabId = null
+                _tabs.update { list -> list.map { it.copy(isPlayingMedia = false) } }
+                mediaSessionHelper.release()
+            }
+        )
+
         webViewManager.setCallbacks(object : WebViewManager.Callbacks {
             override fun onPageProgress(tabId: String, progress: Int) {
                 updateTab(tabId) { it.copy(progress = progress, isLoading = progress < 100) }
@@ -269,8 +404,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (tabId == _activeTabId.value) {
                     _isToolbarHiddenOnScroll.value = false
                 }
-                updateTab(tabId) {
-                    it.copy(
+                val activeGrants = webViewManager.getTemporaryTabPermissions(tabId)
+                updateTab(tabId) { tab ->
+                    val originChanged = tab.domain.isNotBlank() && host.isNotBlank() &&
+                        !tab.domain.equals(host, ignoreCase = true)
+                    tab.copy(
                         url = url,
                         domain = host,
                         isLoading = true,
@@ -278,7 +416,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         zoomPercent = siteZoom,
                         sslSecure = url.startsWith("https://", ignoreCase = true),
                         loadError = null,
-                        snippet = url
+                        snippet = url,
+                        activeSensorGrants = activeGrants,
+                        privacyReport = if (originChanged) TabPrivacyReport() else tab.privacyReport
                     )
                 }
             }
@@ -295,6 +435,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val siteZoom = shieldsEngine.getZoomForDomain(host)
                 webViewManager.setTabZoom(tabId, siteZoom)
                 val currentTab = _tabs.value.firstOrNull { it.id == tabId }
+                if (currentTab != null && (currentTab.mediaSpeed != 1.0f || currentTab.audioBoost != 1.0f)) {
+                    webViewManager.setMediaSpeedAndBoost(tabId, currentTab.mediaSpeed, currentTab.audioBoost)
+                }
                 updateTab(tabId) {
                     it.copy(
                         url = url,
@@ -312,8 +455,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (currentTab != null && !currentTab.isPrivate &&
                     preferences.value.activeProfile != ProfilePersona.ANONYMOUS
                 ) {
+                    val isNewVisit = lastRecordedVisitByTab[tabId] != url
+                    lastRecordedVisitByTab[tabId] = url
                     viewModelScope.launch {
                         repository.recordHistory(url = url, title = cleanTitle, domain = host)
+                        if (isNewVisit && host.isNotBlank()) {
+                            repository.recordSiteVisit(domain = host, title = cleanTitle, url = url)
+                        }
+                        refreshCacheStats()
                     }
                 }
             }
@@ -330,9 +479,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     } else {
                         tab.blockedDomains
                     }
+                    val updatedCounts = if (blockedHost.isNotBlank()) {
+                        val map = tab.privacyReport.blockedHostCounts.toMutableMap()
+                        map[blockedHost] = (map[blockedHost] ?: 0) + 1
+                        map
+                    } else tab.privacyReport.blockedHostCounts
+                    val updatedReport = tab.privacyReport.copy(blockedHostCounts = updatedCounts)
                     val updated = when (category) {
-                        BlockCategory.AD -> tab.copy(adsBlocked = tab.adsBlocked + 1, blockedDomains = updatedDomains)
-                        BlockCategory.TRACKER -> tab.copy(trackersBlocked = tab.trackersBlocked + 1, blockedDomains = updatedDomains)
+                        BlockCategory.AD -> tab.copy(
+                            adsBlocked = tab.adsBlocked + 1,
+                            blockedDomains = updatedDomains,
+                            privacyReport = updatedReport
+                        )
+                        BlockCategory.TRACKER -> tab.copy(
+                            trackersBlocked = tab.trackersBlocked + 1,
+                            blockedDomains = updatedDomains,
+                            privacyReport = updatedReport
+                        )
                         else -> tab
                     }
                     newTotal = updated.totalBlocked
@@ -425,7 +588,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             override fun onPdfUrlDetected(tabId: String, url: String) {
-                openPdfFromUrl(url)
+                openUrlInUniversalViewer(url, "application/pdf")
+            }
+
+            override fun onDocumentUrlDetected(tabId: String, url: String, mimeType: String) {
+                openUrlInUniversalViewer(url, mimeType)
             }
 
             override fun onFullscreenVideoChanged(customView: View?, callback: WebChromeClient.CustomViewCallback?) {
@@ -435,29 +602,153 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             override fun onMediaPlaybackDetected(tabId: String, hasMedia: Boolean, isPlaying: Boolean) {
                 updateTab(tabId) { it.copy(hasActiveMedia = hasMedia, isPlayingMedia = isPlaying) }
+                val updatedList = _tabs.value
+                val playingTab = if (isPlaying) {
+                    updatedList.firstOrNull { it.id == tabId }
+                } else {
+                    updatedList.firstOrNull { it.isPlayingMedia }
+                }
+                if (playingTab != null) {
+                    activeMediaTabId = playingTab.id
+                    mediaSessionHelper.updatePlaybackState(
+                        title = playingTab.title,
+                        domain = playingTab.domain,
+                        isPlaying = true,
+                        hasActiveMedia = true,
+                        notificationsEnabled = preferences.value.notificationsEnabled
+                    )
+                } else if (tabId == activeMediaTabId || tabId == _activeTabId.value) {
+                    val current = updatedList.firstOrNull { it.id == tabId }
+                    if (current != null && current.hasActiveMedia) {
+                        activeMediaTabId = current.id
+                        mediaSessionHelper.updatePlaybackState(
+                            title = current.title,
+                            domain = current.domain,
+                            isPlaying = false,
+                            hasActiveMedia = true,
+                            notificationsEnabled = preferences.value.notificationsEnabled
+                        )
+                    } else {
+                        activeMediaTabId = null
+                        mediaSessionHelper.release()
+                    }
+                }
+            }
+
+            override fun onElementPicked(tabId: String, domain: String, selector: String) {
+                _elementPickerActiveTabId.value = null
+                if (selector.isBlank()) {
+                    showMessage("Element picker cancelled")
+                    return
+                }
+                val cleanHost = domain.lowercase().removePrefix("www.")
+                val rule = if (cleanHost.isNotBlank()) "$cleanHost##$selector" else "##$selector"
+                viewModelScope.launch {
+                    repository.addCustomFilterRule(rule)
+                    webViewManager.reapplyCosmeticRulesNow(tabId, cleanHost)
+                    showMessage("Blocked element: $selector")
+                }
+            }
+
+            override fun onClipboardReadAttempt(tabId: String, host: String) {
+                showMessage("Clipboard access guarded on ${host.ifBlank { "this page" }}")
+            }
+
+            override fun onFeedDiscovered(tabId: String, feedUrl: String?) {
+                updateTab(tabId) { it.copy(discoveredFeedUrl = feedUrl) }
+            }
+
+            override fun onPrivacyApiBlocked(tabId: String, host: String, apiName: String) {
+                updateTab(tabId) { tab ->
+                    val map = tab.privacyReport.apiProbesBlocked.toMutableMap()
+                    map[apiName] = (map[apiName] ?: 0) + 1
+                    tab.copy(privacyReport = tab.privacyReport.copy(apiProbesBlocked = map))
+                }
+            }
+
+            override fun onHomographDetected(warning: HomographWarningState) {
+                updateTab(warning.tabId) { it.copy(isLoading = false) }
+                _homographWarning.value = warning
+            }
+
+            override fun onRedirectUnwrapped(tabId: String, wrapperHost: String, unwrappedUrl: String) {
+                updateTab(tabId) { tab ->
+                    tab.copy(
+                        privacyReport = tab.privacyReport.copy(
+                            unwrappedRedirects = tab.privacyReport.unwrappedRedirects + 1
+                        )
+                    )
+                }
+                showMessage("Link Guard unwrapped tracker via $wrapperHost")
+            }
+
+            override fun onHttpsUpgraded(tabId: String, domain: String) {
+                updateTab(tabId) { tab ->
+                    tab.copy(
+                        privacyReport = tab.privacyReport.copy(
+                            httpsUpgrades = tab.privacyReport.httpsUpgrades + 1
+                        )
+                    )
+                }
+            }
+
+            override fun onWebPermissionRequested(request: WebPermissionPromptRequest) {
+                _webPermissionPrompt.value = request
+            }
+
+            override fun onTemporaryGrantsCleared(tabId: String) {
+                updateTab(tabId) { it.copy(activeSensorGrants = emptySet()) }
             }
         })
     }
 
     fun navigateToInput(rawInput: String) {
+        navigateToInputOnTab(activeTab.value.id, rawInput)
+    }
+
+    fun navigateToInputOnTab(
+        tabId: String,
+        rawInput: String,
+        bypassHomographCheck: Boolean = false
+    ) {
         val trimmed = rawInput.trim()
         if (trimmed.isEmpty()) return
 
         var resolvedUrl = resolveInputToUrl(trimmed)
+        val targetTab = _tabs.value.firstOrNull { it.id == tabId } ?: activeTab.value
+        var unwrappedCount = 0
+        var strippedCount = 0
         if (!looksLikeUrl(trimmed)) {
-            val currentTab = activeTab.value
-            if (!currentTab.isPrivate && preferences.value.activeProfile != ProfilePersona.ANONYMOUS) {
+            if (!targetTab.isPrivate && preferences.value.activeProfile != ProfilePersona.ANONYMOUS) {
                 viewModelScope.launch {
                     repository.recordSearchQuery(trimmed)
                 }
             }
-        } else if (preferences.value.stripTrackingParams) {
-            resolvedUrl = UrlCleaner.cleanUrl(resolvedUrl).cleanedUrl
+        } else {
+            if (preferences.value.unwrapRedirectLinksEnabled) {
+                val unwrap = UrlCleaner.unwrapRedirectUrl(resolvedUrl)
+                if (unwrap.wasUnwrapped) {
+                    resolvedUrl = unwrap.unwrappedUrl
+                    unwrappedCount = 1
+                }
+            }
+            if (preferences.value.stripTrackingParams) {
+                val clean = UrlCleaner.cleanUrl(resolvedUrl)
+                resolvedUrl = clean.cleanedUrl
+                strippedCount = clean.removedCount
+            }
+            if (preferences.value.homographGuardEnabled && !bypassHomographCheck) {
+                val warning = HomographAndPhishingGuard.inspectUrl(resolvedUrl, targetTab.id)
+                if (warning != null) {
+                    _homographWarning.value = warning
+                    return
+                }
+            }
         }
 
         if (shieldsEngine.isMaliciousUrl(resolvedUrl)) {
             _maliciousWarning.value = MaliciousWarningState(
-                tabId = activeTab.value.id,
+                tabId = targetTab.id,
                 url = resolvedUrl,
                 domain = extractHost(resolvedUrl)
             )
@@ -465,18 +756,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         val cleanPath = runCatching { Uri.parse(resolvedUrl).path?.lowercase() }.getOrNull() ?: ""
+        if (UniversalViewerHelper.shouldOpenDirectlyInViewer(resolvedUrl)) {
+            openUrlInUniversalViewer(resolvedUrl)
+            return
+        }
         if (cleanPath.endsWith(".pdf")) {
-            openPdfFromUrl(resolvedUrl)
+            openUrlInUniversalViewer(resolvedUrl, "application/pdf")
             return
         }
 
-        val current = activeTab.value
-        val currentId = current.id
+        val currentId = targetTab.id
         val upgraded = shieldsEngine.maybeUpgradeToHttps(resolvedUrl, null)
-        val targetUrl = if (current.isDesktopMode) webViewManager.normalizeDesktopUrl(upgraded) else upgraded
+        val didUpgradeHttps = upgraded != resolvedUrl
+        val targetUrl = if (targetTab.isDesktopMode) webViewManager.normalizeDesktopUrl(upgraded) else upgraded
         val domain = extractHost(targetUrl)
         val zoomPercent = shieldsEngine.getZoomForDomain(domain)
-        webViewManager.setDesktopMode(currentId, current.isDesktopMode, reloadIfLoaded = false)
+        webViewManager.setDesktopMode(currentId, targetTab.isDesktopMode, reloadIfLoaded = false)
         webViewManager.setTabZoom(currentId, zoomPercent)
         _isToolbarHiddenOnScroll.value = false
         updateTab(currentId) {
@@ -488,12 +783,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 readerArticle = null,
                 isTranslated = false,
                 originalUrlBeforeTranslate = "",
+                discoveredFeedUrl = null,
                 zoomPercent = zoomPercent,
                 loadError = null,
                 isLoading = true,
                 progress = 10,
-                sslSecure = targetUrl.startsWith("https://", ignoreCase = true)
+                sslSecure = targetUrl.startsWith("https://", ignoreCase = true),
+                activeSensorGrants = webViewManager.getTemporaryTabPermissions(currentId),
+                privacyReport = TabPrivacyReport(
+                    unwrappedRedirects = unwrappedCount,
+                    strippedParamsCount = strippedCount,
+                    httpsUpgrades = if (didUpgradeHttps) 1 else 0
+                )
             )
+        }
+        if (unwrappedCount > 0) {
+            showMessage("Link Guard stripped redirect tracker")
         }
         webViewManager.loadUrl(currentId, targetUrl)
     }
@@ -515,7 +820,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun openUrlInNewTab(url: String, isPrivate: Boolean = false) {
+    fun openUrlInNewTab(url: String, isPrivate: Boolean = false, isStandalonePwa: Boolean = false) {
         val cleaned = if (preferences.value.stripTrackingParams) UrlCleaner.cleanUrl(url).cleanedUrl else url
         val upgraded = shieldsEngine.maybeUpgradeToHttps(cleaned, null)
         val isDesktop = preferences.value.defaultDesktopMode
@@ -531,7 +836,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             zoomPercent = zoomPercent,
             sslSecure = targetUrl.startsWith("https://", ignoreCase = true),
             isLoading = true,
-            progress = 10
+            progress = 10,
+            isStandalonePwa = isStandalonePwa
         )
         webViewManager.setDesktopMode(newTab.id, isDesktop, reloadIfLoaded = false)
         webViewManager.setTabZoom(newTab.id, zoomPercent)
@@ -558,15 +864,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _activeTabId.value = tabId
             _findInPageActive.value = false
             _isToolbarHiddenOnScroll.value = false
+            _elementPickerActiveTabId.value = null
             _consoleLogs.value = emptyList()
             _networkLogs.value = emptyList()
             updateTab(tabId) { it.copy(lastAccessedAt = System.currentTimeMillis()) }
+            val currentTabs = _tabs.value
+            val backgroundPlaying = currentTabs.firstOrNull { it.isPlayingMedia }
+            val switched = currentTabs.firstOrNull { it.id == tabId }
+            val sessionTab = backgroundPlaying ?: switched
+            if (sessionTab != null && (sessionTab.isPlayingMedia || sessionTab.hasActiveMedia)) {
+                activeMediaTabId = sessionTab.id
+                mediaSessionHelper.updatePlaybackState(
+                    title = sessionTab.title,
+                    domain = sessionTab.domain,
+                    isPlaying = sessionTab.isPlayingMedia,
+                    hasActiveMedia = sessionTab.hasActiveMedia,
+                    notificationsEnabled = preferences.value.notificationsEnabled
+                )
+            } else {
+                activeMediaTabId = null
+                mediaSessionHelper.release()
+            }
         }
     }
 
     fun closeTab(tabId: String) {
         val currentList = _tabs.value
         val closing = currentList.firstOrNull { it.id == tabId } ?: return
+        if (_splitTabId.value == tabId) {
+            _splitTabId.value = null
+        }
         if (!closing.isPrivate && !closing.isHome) {
             if (recentlyClosedStack.size >= 10) recentlyClosedStack.removeFirst()
             recentlyClosedStack.addLast(closing)
@@ -574,6 +901,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         webViewManager.closeTab(tabId, closing.isPrivate)
         val remaining = currentList.filterNot { it.id == tabId }
+        if (!closing.isHome && closing.domain.isNotBlank() &&
+            shieldsEngine.isEphemeralContainerForDomain(closing.domain) &&
+            remaining.none { it.domain.equals(closing.domain, ignoreCase = true) }
+        ) {
+            webViewManager.clearOriginSiteData(closing.domain)
+        }
         if (remaining.isEmpty()) {
             val fresh = TabState(isDesktopMode = preferences.value.defaultDesktopMode)
             _tabs.value = listOf(fresh)
@@ -610,6 +943,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val target = _tabs.value.firstOrNull { it.id == tabId } ?: return
         val nextPinned = !target.isPinned
         updateTab(tabId) { it.copy(isPinned = nextPinned) }
+        webViewManager.syncPinnedTabs(_tabs.value.filter { it.isPinned }.map { it.id }.toSet())
         showMessage(if (nextPinned) "Tab pinned" else "Tab unpinned")
     }
 
@@ -860,11 +1194,48 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun clearBrowsingData(clearHistory: Boolean, clearCache: Boolean, clearCookies: Boolean) {
         viewModelScope.launch {
             if (clearHistory) {
+                lastRecordedVisitByTab.clear()
                 repository.clearHistory()
                 repository.clearSearchHistory()
             }
+            if (clearCache) {
+                RitamCacheManager.clearAppCache(getApplication())
+            }
             webViewManager.clearAllWebData(clearCache = clearCache, clearCookies = clearCookies)
+            refreshCacheStats()
             showMessage("Browsing data cleared")
+        }
+    }
+
+    fun recordQuickControlUse(controlId: String) {
+        viewModelScope.launch {
+            repository.recordQuickControlUse(controlId)
+        }
+    }
+
+    fun refreshCacheStats() {
+        viewModelScope.launch {
+            _cacheStats.value = withContext(Dispatchers.IO) {
+                RitamCacheManager.computeCacheStats(getApplication())
+            }
+        }
+    }
+
+    fun clearAppCacheOnly() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                RitamCacheManager.clearAppCache(getApplication())
+            }
+            webViewManager.clearAllWebData(clearCache = true, clearCookies = false)
+            refreshCacheStats()
+            showMessage("Application cache cleared")
+        }
+    }
+
+    fun clearSiteUsageAnalytics() {
+        viewModelScope.launch {
+            repository.clearSiteUsage()
+            showMessage("Top sites analytics reset")
         }
     }
 
@@ -882,10 +1253,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    fun copyToClipboard(context: Context, text: String, label: String = "Copied") {
+    fun copyToClipboard(
+        context: Context,
+        text: String,
+        label: String = "Copied",
+        isSensitive: Boolean = false
+    ) {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
-        showMessage("Copied to clipboard")
+        clipboardClearJob?.cancel()
+        val delaySec = preferences.value.clipboardAutoClearSeconds
+        if (isSensitive && delaySec > 0) {
+            showMessage("Copied (auto-clears in ${delaySec}s)")
+            clipboardClearJob = viewModelScope.launch {
+                delay(delaySec * 1000L)
+                runCatching {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        clipboard.clearPrimaryClip()
+                    } else {
+                        clipboard.setPrimaryClip(ClipData.newPlainText("", ""))
+                    }
+                }
+            }
+        } else {
+            showMessage("Copied to clipboard")
+        }
     }
 
     fun captureAndShareScreenshot(rootView: View, context: Context) {
@@ -959,6 +1351,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun pauseDownload(download: DownloadEntity) {
+        downloadManager.pauseDownload(download)
+        showMessage("Paused ${download.filename}")
+    }
+
+    fun resumeDownload(download: DownloadEntity) {
+        downloadManager.resumeDownload(download)
+        showMessage("Resuming ${download.filename}")
+    }
+
     fun cancelDownload(download: DownloadEntity) {
         downloadManager.cancelDownload(download)
     }
@@ -973,13 +1375,87 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun openDownload(download: DownloadEntity) {
         val file = File(download.filePath)
-        if ((download.mimeType.equals("application/pdf", true) || download.filename.endsWith(".pdf", true)) && file.exists()) {
-            openPdfFromFile(file, download.filename)
+        val supported = UniversalViewerHelper.isSupportedFilename(download.filename, download.mimeType)
+        val type = UniversalViewerHelper.classifyType(download.filename, download.mimeType)
+        if (supported && file.exists()) {
+            _universalViewerState.value = UniversalViewerState(
+                title = download.filename,
+                sourceUrl = download.url,
+                localFile = file,
+                fileType = type,
+                mimeType = download.mimeType,
+                isLoading = true
+            )
+            viewModelScope.launch {
+                _universalViewerState.value = UniversalViewerHelper.openLocalFile(
+                    context = getApplication(),
+                    file = file,
+                    displayTitle = download.filename,
+                    mimeType = download.mimeType
+                )
+            }
             return
         }
         if (!downloadManager.openDownloadedFile(download)) {
             showMessage("No app available to open ${download.filename}")
         }
+    }
+
+    fun openUriInUniversalViewer(uri: Uri) {
+        _universalViewerState.value = UniversalViewerState(
+            title = "Opening file…",
+            sourceUrl = uri.toString(),
+            fileType = UniversalFileType.TEXT,
+            isLoading = true
+        )
+        viewModelScope.launch {
+            _universalViewerState.value = UniversalViewerHelper.openUri(getApplication(), uri)
+        }
+    }
+
+    fun openUrlInUniversalViewer(url: String, mimeTypeHint: String = "") {
+        val title = runCatching { Uri.parse(url).lastPathSegment }.getOrNull()
+            ?.takeIf { it.isNotBlank() } ?: "Document"
+        _universalViewerState.value = UniversalViewerState(
+            title = title,
+            sourceUrl = url,
+            fileType = UniversalViewerHelper.classifyType(title, mimeTypeHint),
+            mimeType = mimeTypeHint,
+            isLoading = true
+        )
+        viewModelScope.launch {
+            _universalViewerState.value = UniversalViewerHelper.openRemoteUrl(
+                context = getApplication(),
+                url = url,
+                mimeTypeHint = mimeTypeHint
+            )
+            refreshCacheStats()
+        }
+    }
+
+    fun openFileExternally(context: Context, file: File?, contentUri: Uri?, mimeType: String) {
+        runCatching {
+            val targetUri = when {
+                file != null && file.exists() -> FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
+                contentUri != null -> contentUri
+                else -> return
+            }
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(targetUri, mimeType.ifBlank { "*/*" })
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        }.onFailure {
+            showMessage("No external app available for this file")
+        }
+    }
+
+    fun dismissUniversalViewer() {
+        _universalViewerState.value = null
     }
 
     fun shareDownload(download: DownloadEntity) {
@@ -988,6 +1464,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshStorageStats() {
         _storageStats.value = downloadManager.getDeviceStorageStats()
+        refreshCacheStats()
     }
 
     // Preference & Shields Updates
@@ -1042,8 +1519,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun updateForceWebDarkMode(enabled: Boolean) = viewModelScope.launch {
         preferencesRepository.updateForceWebDarkMode(enabled)
         shieldsEngine.updatePreferences(preferences.value.copy(forceWebDarkMode = enabled))
-        val tab = activeTab.value
-        if (!tab.isHome) webViewManager.applyForceDarkNow(tab.id, tab.domain)
+        webViewManager.applyForceDarkToAllOpenTabs(_tabs.value)
     }
     fun updateBiometricIncognitoLock(enabled: Boolean) = viewModelScope.launch {
         preferencesRepository.updateBiometricIncognitoLock(enabled)
@@ -1078,6 +1554,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         preferencesRepository.updateActiveProfile(profile)
         showMessage("Switched to ${profile.displayName} profile")
     }
+    fun updateFingerprintRandomizer(enabled: Boolean) = viewModelScope.launch { preferencesRepository.updateFingerprintRandomizer(enabled) }
+    fun updateEphemeralContainerDefault(enabled: Boolean) = viewModelScope.launch { preferencesRepository.updateEphemeralContainerDefault(enabled) }
+    fun updateClipboardAutoClearSeconds(seconds: Int) = viewModelScope.launch { preferencesRepository.updateClipboardAutoClearSeconds(seconds) }
+    fun updateBionicReading(enabled: Boolean) = viewModelScope.launch { preferencesRepository.updateBionicReading(enabled) }
+    fun updateReaderColumnWidthDp(dp: Int) = viewModelScope.launch { preferencesRepository.updateReaderColumnWidthDp(dp) }
+    fun updateReaderLineHeightMultiplier(mult: Float) = viewModelScope.launch { preferencesRepository.updateReaderLineHeightMultiplier(mult) }
+    fun updateUserscriptsEnabled(enabled: Boolean) = viewModelScope.launch { preferencesRepository.updateUserscriptsEnabled(enabled) }
+    fun updateScreenSecurityPrivate(enabled: Boolean) = viewModelScope.launch { preferencesRepository.updateScreenSecurityPrivate(enabled) }
+    fun updateHomographGuard(enabled: Boolean) = viewModelScope.launch { preferencesRepository.updateHomographGuard(enabled) }
+    fun updateUnwrapRedirectLinks(enabled: Boolean) = viewModelScope.launch { preferencesRepository.updateUnwrapRedirectLinks(enabled) }
+    fun updateStrictReferrerPolicy(enabled: Boolean) = viewModelScope.launch { preferencesRepository.updateStrictReferrerPolicy(enabled) }
+    fun updateBlockWebRtcLeaks(enabled: Boolean) = viewModelScope.launch { preferencesRepository.updateBlockWebRtcLeaks(enabled) }
+    fun updateLockdownCovertApis(enabled: Boolean) = viewModelScope.launch { preferencesRepository.updateLockdownCovertApis(enabled) }
+
     fun resetAppearanceDefaults() = viewModelScope.launch {
         preferencesRepository.resetAppearanceDefaults()
         showMessage("Appearance restored to defaults")
@@ -1103,12 +1593,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _isToolbarHiddenOnScroll.value = false
     }
 
-    fun toggleTabMediaPlayback() {
+    fun toggleTabMediaPlayback(targetTabId: String = activeTab.value.id) {
+        val tab = _tabs.value.firstOrNull { it.id == targetTabId } ?: return
+        if (!tab.isHome) {
+            val nextPlaying = !tab.isPlayingMedia
+            webViewManager.toggleMediaPlayback(tab.id)
+            updateTab(tab.id) { it.copy(isPlayingMedia = nextPlaying) }
+            activeMediaTabId = tab.id
+            mediaSessionHelper.updatePlaybackState(
+                title = tab.title,
+                domain = tab.domain,
+                isPlaying = nextPlaying,
+                hasActiveMedia = tab.hasActiveMedia || nextPlaying,
+                notificationsEnabled = preferences.value.notificationsEnabled
+            )
+        }
+    }
+
+    fun onEnteringPipMode() {
         val tab = activeTab.value
         if (!tab.isHome) {
-            webViewManager.toggleMediaPlayback(tab.id)
-            updateTab(tab.id) { it.copy(isPlayingMedia = !it.isPlayingMedia) }
+            webViewManager.onEnteringPipMode(tab.id)
         }
+    }
+
+    fun onEnteredPipMode(active: Boolean) {
+        val tab = activeTab.value
+        if (!tab.isHome) {
+            webViewManager.setPipVideoFocusMode(tab.id, active)
+        }
+    }
+
+    fun setTabMediaSpeedAndBoost(speed: Float, boost: Float) {
+        val tab = activeTab.value
+        if (tab.isHome) return
+        val clampedSpeed = speed.coerceIn(0.5f, 3.0f)
+        val clampedBoost = boost.coerceIn(1.0f, 2.5f)
+        updateTab(tab.id) { it.copy(mediaSpeed = clampedSpeed, audioBoost = clampedBoost) }
+        webViewManager.setMediaSpeedAndBoost(tab.id, clampedSpeed, clampedBoost)
+        showMessage("Media: ${String.format("%.2gx", clampedSpeed)} • Boost ${String.format("%.1fx", clampedBoost)}")
     }
 
     fun exitFullscreenVideo() {
@@ -1123,12 +1646,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             delay(700L)
             readAloudController.stop()
             webViewManager.pauseAllMedia()
+            webViewManager.clearBypassedHomographHosts()
             _tabs.value.forEach { webViewManager.closeTab(it.id, true) }
             recentlyClosedStack.clear()
             _recentlyClosedCount.value = 0
+            lastRecordedVisitByTab.clear()
             repository.clearHistory()
             repository.clearSearchHistory()
+            RitamCacheManager.clearAppCache(getApplication())
             webViewManager.clearAllWebData(clearCache = true, clearCookies = true)
+            refreshCacheStats()
             val fresh = TabState(isDesktopMode = preferences.value.defaultDesktopMode)
             _tabs.value = listOf(fresh)
             _activeTabId.value = fresh.id
@@ -1144,6 +1671,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repository.clearHistory()
             repository.clearSearchHistory()
+            RitamCacheManager.clearAppCache(getApplication())
             webViewManager.clearAllWebData(clearCache = true, clearCookies = true)
         }
     }
@@ -1337,10 +1865,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _externalAppRequest.value = null
     }
 
-    // --- DevTools Inspector ---
-    fun openDevTools() {
+    // --- Unified CDP Developer Inspector (Elements, Console, Network, Format, Storage/Cache) ---
+    fun openDevTools(initialTab: Int = 1) {
+        _devToolsInitialTab.value = initialTab.coerceIn(0, 4)
         _devToolsVisible.value = true
         refreshDevStorage()
+        refreshCacheStats()
+        if (initialTab == 0 || _devToolsPageSource.value.isBlank()) {
+            refreshDevSource()
+        }
+        if (initialTab == 3) {
+            refreshDevFormat()
+        }
     }
 
     fun dismissDevTools() {
@@ -1354,12 +1890,59 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun refreshDevSource() {
+        val tab = activeTab.value
+        if (tab.isHome && tab.readerArticle == null) return
+        webViewManager.extractPageSource(tab) { html ->
+            if (html.isNotBlank()) {
+                _devToolsPageSource.value = html
+            }
+        }
+    }
+
+    fun refreshDevFormat() {
+        val tab = activeTab.value
+        if (tab.url.isBlank() || tab.isHome) return
+        _cdpFormatState.value = StructuredViewerState(
+            title = tab.title.ifBlank { tab.domain },
+            url = tab.url,
+            docType = StructuredDocType.JSON,
+            formattedText = "",
+            rawText = "",
+            isLoading = true
+        )
+        viewModelScope.launch {
+            StructuredViewerHelper.fetchStructuredDocument(tab.url, getApplication())
+                .onSuccess { state ->
+                    _cdpFormatState.value = state
+                    refreshCacheStats()
+                }
+                .onFailure {
+                    webViewManager.extractPageTextForTranslation(tab.id) { text ->
+                        val detected = StructuredViewerHelper.detectDocType(tab.url, text)
+                        val formatted = if (detected == StructuredDocType.JSON) {
+                            StructuredViewerHelper.formatPrettyJson(text) ?: text
+                        } else text
+                        _cdpFormatState.value = StructuredViewerState(
+                            title = tab.title.ifBlank { tab.domain },
+                            url = tab.url,
+                            docType = detected,
+                            formattedText = formatted,
+                            rawText = text,
+                            isLoading = false
+                        )
+                    }
+                }
+        }
+    }
+
     fun refreshDevStorage() {
         val tab = activeTab.value
         webViewManager.inspectSiteStorage(tab.id, tab.url) { cookies, pairs ->
             _cookiesDump.value = cookies
             _localStoragePairs.value = pairs
         }
+        refreshCacheStats()
     }
 
     fun clearDevLogs() {
@@ -1395,17 +1978,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             showMessage("Open a webpage to inspect source")
             return
         }
-        webViewManager.extractPageSource(tab) { html ->
-            if (html.isBlank()) {
-                showMessage("Page source unavailable until load completes")
-            } else {
-                _pageSourceState.value = PageSourceDialogState(
-                    title = tab.title.ifBlank { tab.domain },
-                    url = tab.url.ifBlank { "ritam://sanctuary-essay" },
-                    htmlSource = html
-                )
-            }
-        }
+        openDevTools(initialTab = 0)
     }
 
     fun dismissPageSource() {
@@ -1504,7 +2077,488 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // --- 19-Feature Power Capabilities ---
+
+    fun setCommandPaletteOpen(open: Boolean) {
+        _commandPaletteOpen.value = open
+    }
+
+    fun toggleSplitScreen(secondTabId: String? = null) {
+        val activeId = _activeTabId.value
+        if (_splitTabId.value != null && secondTabId == null) {
+            _splitTabId.value = null
+            showMessage("Closed split view")
+            return
+        }
+        val candidate = if (secondTabId != null && secondTabId != activeId) {
+            _tabs.value.firstOrNull { it.id == secondTabId }
+        } else {
+            _tabs.value.firstOrNull { it.id != activeId && !it.isPrivate }
+                ?: _tabs.value.firstOrNull { it.id != activeId }
+        }
+        if (candidate != null) {
+            _splitTabId.value = candidate.id
+            showMessage("Split View: ${candidate.title}")
+        } else {
+            val second = TabState(
+                title = "Split Pane",
+                isDesktopMode = preferences.value.defaultDesktopMode
+            )
+            webViewManager.setDesktopMode(second.id, second.isDesktopMode, reloadIfLoaded = false)
+            _tabs.update { it + second }
+            _splitTabId.value = second.id
+            showMessage("Opened Split View pane")
+        }
+    }
+
+    fun swapSplitPanes() {
+        val activeId = _activeTabId.value
+        val secondaryId = _splitTabId.value ?: return
+        _activeTabId.value = secondaryId
+        _splitTabId.value = activeId
+        showMessage("Swapped split panes")
+    }
+
+    fun closeSplitPane() {
+        _splitTabId.value = null
+    }
+
+    fun toggleElementPicker() {
+        val tab = activeTab.value
+        if (tab.isHome || tab.isReaderMode) {
+            showMessage("Open a webpage to pick an element to block")
+            return
+        }
+        if (_elementPickerActiveTabId.value == tab.id) {
+            _elementPickerActiveTabId.value = null
+            webViewManager.reload(tab.id)
+        } else {
+            _elementPickerActiveTabId.value = tab.id
+            webViewManager.enableElementPicker(tab.id)
+            showMessage("Tap any ad, banner, or popup to hide it")
+        }
+    }
+
+    fun captureFullPageScreenshot(fallbackRootView: View, context: Context) {
+        val tab = activeTab.value
+        if (tab.isHome || tab.isReaderMode) {
+            captureAndShareScreenshot(fallbackRootView, context)
+            return
+        }
+        webViewManager.captureFullPageBitmap(tab.id) { fullBmp ->
+            if (fullBmp == null) {
+                captureAndShareScreenshot(fallbackRootView, context)
+                return@captureFullPageBitmap
+            }
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching {
+                    val file = File(context.cacheDir, "ritam_fullpage_${System.currentTimeMillis()}.png")
+                    FileOutputStream(file).use { out ->
+                        fullBmp.compress(Bitmap.CompressFormat.PNG, 92, out)
+                    }
+                    fullBmp.recycle()
+                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "image/png"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    withContext(Dispatchers.Main) {
+                        context.startActivity(
+                            Intent.createChooser(shareIntent, "Share Full-Page Screenshot").apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                        )
+                    }
+                }.onFailure {
+                    withContext(Dispatchers.Main) {
+                        showMessage("Full-page capture exceeded memory; sharing viewport instead")
+                        captureAndShareScreenshot(fallbackRootView, context)
+                    }
+                }
+            }
+        }
+    }
+
+    fun setUserscriptsDialogOpen(open: Boolean) {
+        _userscriptsDialogOpen.value = open
+    }
+
+    fun addUserscript(name: String, urlPattern: String, code: String, isCss: Boolean) {
+        viewModelScope.launch {
+            repository.addUserscript(name, urlPattern, code, isCss)
+            showMessage("Userscript \"$name\" saved")
+        }
+    }
+
+    fun setUserscriptEnabled(id: Long, enabled: Boolean) = viewModelScope.launch {
+        repository.setUserscriptEnabled(id, enabled)
+    }
+
+    fun deleteUserscript(id: Long) = viewModelScope.launch {
+        repository.deleteUserscript(id)
+    }
+
+    fun setWatchlistDialogOpen(open: Boolean) {
+        _watchlistDialogOpen.value = open
+    }
+
+    fun addCurrentPageToWatchlist() {
+        val tab = activeTab.value
+        if (tab.url.isBlank() || tab.isHome) {
+            showMessage("Open a webpage first to monitor changes")
+            return
+        }
+        viewModelScope.launch {
+            showMessage("Snapshotting ${tab.domain}...")
+            val hash = WatchlistAndSyncHelper.computePageContentHash(tab.url).getOrElse {
+                WatchlistAndSyncHelper.sha256Hex(tab.title + tab.url)
+            }
+            repository.upsertWatchlistItem(
+                WatchlistItemEntity(
+                    url = tab.url,
+                    domain = tab.domain,
+                    title = tab.title.ifBlank { tab.domain },
+                    lastContentHash = hash,
+                    lastCheckedAt = System.currentTimeMillis(),
+                    hasUnreadChange = false
+                )
+            )
+            showMessage("Added ${tab.domain} to Watchlist")
+        }
+    }
+
+    fun checkWatchlistNow() {
+        viewModelScope.launch {
+            val items = repository.getWatchlistOnce()
+            if (items.isEmpty()) {
+                showMessage("Watchlist is empty")
+                return@launch
+            }
+            var changedCount = 0
+            items.forEach { item ->
+                val result = WatchlistAndSyncHelper.computePageContentHash(item.url)
+                result.onSuccess { newHash ->
+                    val changed = item.lastContentHash.isNotBlank() && newHash != item.lastContentHash
+                    if (changed) {
+                        changedCount++
+                        if (preferences.value.notificationsEnabled) {
+                            notificationManager.notifyWatchlistChanged(item.title, item.domain)
+                        }
+                    }
+                    repository.upsertWatchlistItem(
+                        item.copy(
+                            lastContentHash = newHash,
+                            lastCheckedAt = System.currentTimeMillis(),
+                            hasUnreadChange = item.hasUnreadChange || changed
+                        )
+                    )
+                }
+            }
+            showMessage(
+                if (changedCount > 0) "$changedCount watched page(s) updated!"
+                else "All ${items.size} watched pages unchanged"
+            )
+        }
+    }
+
+    fun markWatchlistSeen(id: Long) = viewModelScope.launch {
+        repository.markWatchlistSeen(id)
+    }
+
+    fun deleteWatchlistItem(id: Long) = viewModelScope.launch {
+        repository.deleteWatchlistItem(id)
+    }
+
+    fun openHighlightCapture() {
+        val tab = activeTab.value
+        if (tab.isHome && tab.readerArticle == null) {
+            showMessage("Open an article or webpage to highlight text")
+            return
+        }
+        if (tab.isReaderMode && tab.readerArticle != null) {
+            _pendingHighlightRequest.value = HighlightSelectionRequest(
+                tabId = tab.id,
+                url = tab.url.ifBlank { "ritam://sanctuary-essay" },
+                domain = tab.domain.ifBlank { "ritam.local" },
+                title = tab.readerArticle.title,
+                quoteText = tab.readerArticle.quote ?: tab.readerArticle.paragraphs.firstOrNull().orEmpty().take(500)
+            )
+            return
+        }
+        webViewManager.extractSelectedText(tab.id) { selected ->
+            _pendingHighlightRequest.value = HighlightSelectionRequest(
+                tabId = tab.id,
+                url = tab.url,
+                domain = tab.domain,
+                title = tab.title.ifBlank { tab.domain },
+                quoteText = selected.ifBlank { tab.title }
+            )
+        }
+    }
+
+    fun dismissHighlightCapture() {
+        _pendingHighlightRequest.value = null
+    }
+
+    fun saveHighlight(quoteText: String, note: String, colorHex: String) {
+        val req = _pendingHighlightRequest.value ?: return
+        _pendingHighlightRequest.value = null
+        viewModelScope.launch {
+            repository.addHighlight(
+                url = req.url,
+                domain = req.domain,
+                title = req.title,
+                quoteText = quoteText,
+                note = note,
+                colorHex = colorHex
+            )
+            showMessage("Highlight saved to Library")
+        }
+    }
+
+    fun deleteHighlight(id: Long) = viewModelScope.launch {
+        repository.deleteHighlight(id)
+    }
+
+    fun exportHighlightsToUri(context: Context, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val md = repository.exportHighlightsAsMarkdown()
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    out.write(md.toByteArray(Charsets.UTF_8))
+                }
+                showMessage("Highlights exported as Markdown")
+            }.onFailure {
+                showMessage("Highlights export failed")
+            }
+        }
+    }
+
+    fun subscribeRssFeed(feedUrl: String) {
+        val clean = feedUrl.trim()
+        if (!clean.startsWith("http")) {
+            showMessage("Enter a valid RSS or Atom feed URL")
+            return
+        }
+        viewModelScope.launch {
+            showMessage("Subscribing to feed...")
+            RssFeedHelper.fetchAndParseFeed(clean)
+                .onSuccess { parsed ->
+                    repository.saveRssFeedAndArticles(
+                        feedTitle = parsed.title,
+                        feedUrl = parsed.feedUrl,
+                        siteUrl = parsed.siteUrl,
+                        articles = parsed.articles
+                    )
+                    showMessage("Subscribed to ${parsed.title} (${parsed.articles.size} articles)")
+                }
+                .onFailure {
+                    showMessage("Could not load RSS/Atom feed")
+                }
+        }
+    }
+
+    fun refreshAllRssFeeds() {
+        viewModelScope.launch {
+            val feeds = repository.getRssFeedsOnce()
+            if (feeds.isEmpty()) {
+                showMessage("No subscribed feeds yet")
+                return@launch
+            }
+            var updated = 0
+            feeds.forEach { feed ->
+                RssFeedHelper.fetchAndParseFeed(feed.feedUrl).onSuccess { parsed ->
+                    repository.saveRssFeedAndArticles(
+                        feedTitle = parsed.title,
+                        feedUrl = feed.feedUrl,
+                        siteUrl = parsed.siteUrl,
+                        articles = parsed.articles
+                    )
+                    updated++
+                }
+            }
+            showMessage("Refreshed $updated feed(s)")
+        }
+    }
+
+    fun setRssArticleRead(id: Long, isRead: Boolean) = viewModelScope.launch {
+        repository.setRssArticleRead(id, isRead)
+    }
+
+    fun deleteRssFeed(feedId: Long) = viewModelScope.launch {
+        repository.deleteRssFeed(feedId)
+        showMessage("Unsubscribed from feed")
+    }
+
+    fun installCurrentSiteAsPwa(context: Context) {
+        val tab = activeTab.value
+        if (tab.url.isBlank() || tab.isHome) {
+            showMessage("Open a website first to install shortcut")
+            return
+        }
+        val ok = PwaShortcutHelper.pinWebAppShortcut(
+            context = context,
+            url = tab.url,
+            title = tab.title.ifBlank { tab.domain },
+            standaloneWindow = true
+        )
+        showMessage(
+            if (ok) "Pinned ${tab.domain} as Web App shortcut"
+            else "Launcher doesn't support direct pin — use launcher Widgets/Shortcuts"
+        )
+    }
+
+    fun openStructuredViewerForCurrentPage() {
+        val tab = activeTab.value
+        if (tab.url.isBlank() || tab.isHome) {
+            showMessage("Open a JSON, Markdown, or XML URL first")
+            return
+        }
+        openDevTools(initialTab = 3)
+    }
+
+    fun dismissStructuredViewer() {
+        _structuredViewerState.value = null
+    }
+
+    fun syncAllFilterLists() {
+        viewModelScope.launch {
+            val lists = repository.getFilterListsOnce()
+            var synced = 0
+            lists.filter { it.enabled }.forEach { list ->
+                WatchlistAndSyncHelper.syncFilterListRuleCount(list.source, list.ruleCount)
+                    .onSuccess { newCount ->
+                        repository.updateFilterListStats(list.id, newCount, System.currentTimeMillis())
+                        synced++
+                    }
+            }
+            showMessage("Synchronized $synced active shield filter list(s)")
+        }
+    }
+
+    fun exportConfigBackupToUri(context: Context, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val json = repository.exportConfigBackupJson()
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    out.write(json.toByteArray(Charsets.UTF_8))
+                }
+                showMessage("Exported full Ritam config backup (JSON)")
+            }.onFailure {
+                showMessage("Config backup export failed")
+            }
+        }
+    }
+
+    fun importConfigBackupFromUri(context: Context, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val json = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
+                val count = repository.importConfigBackupJson(json)
+                showMessage("Restored $count items from Ritam backup")
+            }.onFailure {
+                showMessage("Invalid backup JSON file")
+            }
+        }
+    }
+
+    fun exportEncryptedBackupToUri(context: Context, uri: Uri, passphrase: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val envelope = repository.exportEncryptedVaultAndConfigJson(passphrase)
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    out.write(envelope.toByteArray(Charsets.UTF_8))
+                }
+                showMessage("Exported AES-256 encrypted backup (.ritamvault)")
+            }.onFailure { err ->
+                showMessage(err.message ?: "Encrypted backup export failed")
+            }
+        }
+    }
+
+    fun importEncryptedBackupFromUri(context: Context, uri: Uri, passphrase: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
+                val count = repository.importEncryptedBackup(content, passphrase)
+                showMessage("Restored $count items & vault secrets securely")
+            }.onFailure {
+                showMessage("Wrong passphrase or invalid encrypted backup")
+            }
+        }
+    }
+
+    // --- 9-Feature Privacy & Security Controls ---
+
+    fun dismissHomographWarning() {
+        _homographWarning.value = null
+    }
+
+    fun bypassHomographAndLoad() {
+        val warning = _homographWarning.value ?: return
+        _homographWarning.value = null
+        webViewManager.allowHomographHostOnce(warning.asciiHost)
+        navigateToInputOnTab(warning.tabId, warning.url, bypassHomographCheck = true)
+    }
+
+    fun resolveWebPermissionPrompt(allow: Boolean, rememberForDomain: Boolean) {
+        val req = _webPermissionPrompt.value ?: return
+        _webPermissionPrompt.value = null
+
+        if (allow) {
+            req.rawPermissionRequest?.let { pr ->
+                runCatching { pr.grant(pr.resources) }
+            }
+            req.geoCallback?.invoke(req.geoOrigin, true, rememberForDomain)
+            if (!rememberForDomain) {
+                webViewManager.grantTemporaryTabPermissions(req.tabId, req.permissionKeys)
+                updateTab(req.tabId) {
+                    it.copy(activeSensorGrants = webViewManager.getTemporaryTabPermissions(req.tabId))
+                }
+                showMessage("${req.resourceLabels.joinToString(" & ")} allowed for this tab only")
+            } else {
+                showMessage("Always allowed ${req.resourceLabels.joinToString(" & ")} on ${req.domain}")
+            }
+        } else {
+            req.rawPermissionRequest?.let { pr ->
+                runCatching { pr.deny() }
+            }
+            req.geoCallback?.invoke(req.geoOrigin, false, false)
+            showMessage("Blocked ${req.resourceLabels.joinToString(" & ")} on ${req.domain}")
+        }
+
+        if (rememberForDomain && req.domain.isNotBlank()) {
+            val cleanDomain = req.domain.lowercase().removePrefix("www.")
+            val value = if (allow) 1 else -1
+            viewModelScope.launch {
+                val existing = repository.getWebsiteSettings(cleanDomain) ?: WebsiteSettingsEntity(domain = cleanDomain)
+                var updated = existing
+                if ("CAMERA" in req.permissionKeys) updated = updated.copy(cameraPermission = value)
+                if ("MICROPHONE" in req.permissionKeys) updated = updated.copy(micPermission = value)
+                if ("LOCATION" in req.permissionKeys) updated = updated.copy(locationPermission = value)
+                repository.upsertWebsiteSettings(updated.copy(updatedAt = System.currentTimeMillis()))
+            }
+        }
+    }
+
+    fun setTrackerXRayOpen(open: Boolean) {
+        _trackerXRayOpen.value = open
+    }
+
+    fun toggleRuleForXRayHost(host: String, block: Boolean) {
+        val clean = host.trim().lowercase().removePrefix("www.")
+        if (clean.isBlank()) return
+        val rule = if (block) "||$clean^" else "@@||$clean^"
+        viewModelScope.launch {
+            repository.addCustomFilterRule(rule)
+            showMessage(if (block) "Added block rule: $rule" else "Allowlisted host: $rule")
+        }
+    }
+
     override fun onCleared() {
+        clipboardClearJob?.cancel()
+        mediaSessionHelper.shutdown()
         readAloudController.shutdown()
         super.onCleared()
     }
@@ -1532,7 +2586,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         jsEnabled: Boolean,
         httpsOnly: Boolean,
         zoomPercent: Int = 100,
-        forceDarkOverride: Int = -1
+        forceDarkOverride: Int = -1,
+        isEphemeralContainer: Boolean = false
     ) {
         viewModelScope.launch {
             repository.upsertWebsiteSettings(
@@ -1542,7 +2597,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     javascriptEnabled = jsEnabled,
                     httpsOnly = httpsOnly,
                     zoomPercent = zoomPercent.coerceIn(50, 200),
-                    forceDarkOverride = forceDarkOverride
+                    forceDarkOverride = forceDarkOverride,
+                    isEphemeralContainer = isEphemeralContainer
                 )
             )
             val tab = activeTab.value

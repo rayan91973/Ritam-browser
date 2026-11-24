@@ -14,7 +14,6 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.GppBad
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Remove
-import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -277,17 +276,13 @@ fun ClearBrowsingDataDialog(
 fun SitePermissionsDialog(
     domain: String,
     sslSecure: Boolean,
-    shieldsEnabled: Boolean,
     jsEnabled: Boolean,
-    httpsOnly: Boolean,
     zoomPercent: Int = 100,
     forceDarkOverride: Int = -1,
-    onSave: (shields: Boolean, js: Boolean, https: Boolean, zoomPercent: Int, forceDarkOverride: Int) -> Unit,
+    onSave: (js: Boolean, zoomPercent: Int, forceDarkOverride: Int) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var shields by remember { mutableStateOf(shieldsEnabled) }
     var js by remember { mutableStateOf(jsEnabled) }
-    var https by remember { mutableStateOf(httpsOnly) }
     var zoom by remember { mutableIntStateOf(zoomPercent.coerceIn(50, 200)) }
     var darkMode by remember { mutableIntStateOf(forceDarkOverride) }
 
@@ -295,9 +290,9 @@ fun SitePermissionsDialog(
         onDismissRequest = onDismiss,
         icon = {
             Icon(
-                imageVector = if (sslSecure) Icons.Rounded.Lock else Icons.Rounded.Shield,
+                imageVector = if (sslSecure) Icons.Rounded.Lock else Icons.Rounded.Warning,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
+                tint = if (sslSecure) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
             )
         },
         title = { Text(domain.ifBlank { "Site Information" }) },
@@ -313,24 +308,8 @@ fun SitePermissionsDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Ritam Shields", style = MaterialTheme.typography.bodyMedium)
-                    Switch(checked = shields, onCheckedChange = { shields = it })
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
                     Text("JavaScript", style = MaterialTheme.typography.bodyMedium)
                     Switch(checked = js, onCheckedChange = { js = it })
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("HTTPS-Only Upgrade", style = MaterialTheme.typography.bodyMedium)
-                    Switch(checked = https, onCheckedChange = { https = it })
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -361,94 +340,12 @@ fun SitePermissionsDialog(
             }
         },
         confirmButton = {
-            Button(onClick = { onSave(shields, js, https, zoom, darkMode) }) {
+            Button(onClick = { onSave(js, zoom, darkMode) }) {
                 Text("Apply")
             }
         },
         dismissButton = {
             OutlinedButton(onClick = onDismiss) { Text("Close") }
-        }
-    )
-}
-
-@Composable
-fun AddVaultEntryDialog(
-    onSave: (label: String, domain: String, username: String, secret: String, category: String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var label by remember { mutableStateOf("") }
-    var domain by remember { mutableStateOf("") }
-    var username by remember { mutableStateOf("") }
-    var secret by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("Login") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add Local Vault Item") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("Login", "ApiKey").forEach { cat ->
-                        OutlinedButton(
-                            onClick = { category = cat },
-                            colors = if (category == cat) ButtonDefaults.outlinedButtonColors(
-                                containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                            ) else ButtonDefaults.outlinedButtonColors(),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(if (cat == "Login") "Login" else "API Key")
-                        }
-                    }
-                }
-                OutlinedTextField(
-                    value = label,
-                    onValueChange = { label = it },
-                    label = { Text("Label (e.g. Work Git)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = domain,
-                    onValueChange = { domain = it },
-                    label = { Text("Domain (e.g. github.com)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = username,
-                    onValueChange = { username = it },
-                    label = { Text(if (category == "Login") "Username / Email" else "Scope / Header") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = secret,
-                    onValueChange = { secret = it },
-                    label = { Text(if (category == "Login") "Password" else "Token / Secret") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = "Stored strictly on-device in Ritam's local Room vault.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (label.isNotBlank() && secret.isNotBlank()) {
-                        onSave(label, domain, username, secret, category)
-                    }
-                }
-            ) {
-                Text("Save Locally")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
 }

@@ -142,24 +142,24 @@ fun TabSwitcherOverlay(
     ) {
         Surface(
             modifier = Modifier
-                .widthIn(max = 600.dp)
+                .widthIn(max = 500.dp)
                 .fillMaxWidth()
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = {}
                 ),
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
             color = ext.surfaceLow,
             tonalElevation = 6.dp,
-            shadowElevation = 18.dp,
+            shadowElevation = 14.dp,
             border = BorderStroke(1.dp, ext.cardBorder)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding()
-                    .padding(top = 8.dp, bottom = 10.dp)
+                    .padding(top = 6.dp, bottom = 8.dp)
             ) {
                 // Pull Pill Handle
                 Box(
@@ -387,14 +387,14 @@ fun TabSwitcherOverlay(
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
                             onClick = {
                                 onNewTab(false)
                                 onDismiss()
                             },
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = MaterialTheme.colorScheme.onPrimary
@@ -402,18 +402,18 @@ fun TabSwitcherOverlay(
                             elevation = ButtonDefaults.buttonElevation(defaultElevation = 1.dp),
                             modifier = Modifier
                                 .weight(1f)
-                                .height(48.dp)
+                                .height(40.dp)
                                 .testTag("new_regular_tab_button")
                         ) {
                             Icon(
                                 Icons.Rounded.Add,
                                 contentDescription = null,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(17.dp)
                             )
-                            Spacer(Modifier.width(6.dp))
+                            Spacer(Modifier.width(5.dp))
                             Text(
                                 text = "New Tab",
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
                             )
                         }
 
@@ -422,12 +422,12 @@ fun TabSwitcherOverlay(
                                 onNewTab(true)
                                 onDismiss()
                             },
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(12.dp),
                             color = IncognitoColors.SurfaceElevated,
                             border = BorderStroke(1.dp, IncognitoColors.Border),
                             modifier = Modifier
                                 .weight(1f)
-                                .height(48.dp)
+                                .height(40.dp)
                                 .testTag("new_private_tab_button")
                         ) {
                             Row(
@@ -436,14 +436,14 @@ fun TabSwitcherOverlay(
                                 horizontalArrangement = Arrangement.Center
                             ) {
                                 IncognitoSpectsEmblem(
-                                    size = 20.dp,
+                                    size = 17.dp,
                                     tint = IncognitoColors.Accent,
                                     hatFill = IncognitoColors.Surface
                                 )
-                                Spacer(Modifier.width(7.dp))
+                                Spacer(Modifier.width(6.dp))
                                 Text(
                                     text = "Private",
-                                    style = MaterialTheme.typography.labelLarge,
+                                    style = MaterialTheme.typography.labelMedium,
                                     color = IncognitoColors.OnSurface
                                 )
                                 Spacer(Modifier.width(8.dp))
@@ -571,21 +571,21 @@ private fun CompactTabDrawerRow(
     val leadingIcon = when {
         tab.isReaderMode -> Icons.AutoMirrored.Rounded.MenuBook
         tab.isHome -> Icons.Rounded.Spa
-        tab.domain.contains("github", true) || tab.domain.contains("aistudio", true) -> Icons.Rounded.Terminal
+        tab.domain.contains("github", true) || tab.domain.contains("gitlab", true) -> Icons.Rounded.Terminal
         else -> Icons.Rounded.Public
     }
 
     Surface(
         onClick = onSelect,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         color = rowBackground,
         border = BorderStroke(
             width = if (isActive) 1.2.dp else 0.8.dp,
             color = when {
                 tab.isPrivate && isActive -> IncognitoColors.Accent.copy(alpha = 0.7f)
                 tab.isPrivate -> IncognitoColors.Border
-                isActive -> MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
-                else -> ext.cardBorder.copy(alpha = 0.5f)
+                isActive -> MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                else -> ext.cardBorder
             }
         ),
         modifier = Modifier
@@ -595,24 +595,24 @@ private fun CompactTabDrawerRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 7.dp),
+                .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Leading icon tile with active dot
             Box(contentAlignment = Alignment.TopEnd) {
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(9.dp),
                     color = when {
                         tab.isPrivate -> IncognitoColors.BadgeBg
                         isActive -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
                         else -> ext.surfaceHigh
                     },
-                    modifier = Modifier.size(34.dp)
+                    modifier = Modifier.size(30.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         if (tab.isPrivate) {
                             IncognitoSpectsEmblem(
-                                size = 20.dp,
+                                size = 16.dp,
                                 tint = IncognitoColors.Accent,
                                 hatFill = IncognitoColors.Surface
                             )
@@ -621,7 +621,7 @@ private fun CompactTabDrawerRow(
                                 imageVector = leadingIcon,
                                 contentDescription = null,
                                 tint = if (isActive) MaterialTheme.colorScheme.primary else secondaryText,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }

@@ -1,9 +1,12 @@
 package com.example.ui.screens
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
+import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -13,10 +16,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,23 +39,31 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.RssFeed
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.SwapHoriz
+import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,7 +75,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -71,24 +83,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import coil.compose.AsyncImage
 import com.example.browser.SanctuaryReaderSamples
+import com.example.browser.SiteShortcutPlanner
 import com.example.browser.TabState
 import com.example.browser.WebViewManager
 import com.example.data.local.BookmarkEntity
 import com.example.data.local.SearchHistoryEntity
+import com.example.data.local.SiteUsageEntity
 import com.example.data.preferences.BrowserPreferences
 import com.example.data.preferences.SearchEngine
 import com.example.services.ReadAloudState
 import com.example.ui.components.ActiveOmniboxHeader
-import com.example.ui.components.BiometricLockScreenOverlay
 import com.example.ui.components.BottomNavDock
 import com.example.ui.components.FindInPageBar
 import com.example.ui.components.IncognitoColors
 import com.example.ui.components.IncognitoSpectsEmblem
 import com.example.ui.components.LotusEmblem
 import com.example.ui.components.OmniboxSearchOverlay
-import com.example.ui.components.RITAM_AVATAR_URL
 import com.example.ui.components.ReadAloudFloatingBar
 import com.example.ui.components.SearchEngineSelectorPillButton
 import com.example.ui.theme.LocalRitamExtendedColors
@@ -98,14 +109,15 @@ import com.example.ui.theme.NewsreaderFamily
 @Composable
 fun BrowserScreen(
     activeTab: TabState,
-    tabsCount: Int,
+    tabs: List<TabState> = listOf(activeTab),
+    tabsCount: Int = tabs.size,
+    isBrowserFocused: Boolean = true,
     preferences: BrowserPreferences,
     homeBookmarks: List<BookmarkEntity>,
+    topSites: List<SiteUsageEntity> = emptyList(),
     allBookmarks: List<BookmarkEntity>,
     recentSearches: List<SearchHistoryEntity>,
     webViewManager: WebViewManager,
-    shieldsEnabledForSite: Boolean,
-    sessionBlockedCount: Long,
     findInPageActive: Boolean,
     findInPageQuery: String,
     readerFontSizeSp: Int,
@@ -125,7 +137,6 @@ fun BrowserScreen(
     onToggleReaderMode: () -> Unit,
     onToggleDesktopMode: () -> Unit,
     onAdjustReaderFontSize: (Int) -> Unit,
-    onToggleSiteShields: () -> Unit,
     onFindQueryChange: (String) -> Unit,
     onFindNext: (Boolean) -> Unit,
     onCloseFind: () -> Unit,
@@ -136,25 +147,32 @@ fun BrowserScreen(
     onStopReadAloud: () -> Unit = {},
     onOpenTabSwitcher: () -> Unit,
     onOpenQuickControls: () -> Unit,
-    onOpenShieldSettings: () -> Unit,
-    onOpenProfileSettings: () -> Unit,
+    onOpenSettings: () -> Unit,
     onOpenAddBookmark: (allowUrlEdit: Boolean) -> Unit,
     onOpenBookmarksManager: () -> Unit,
     onOpenSiteInfo: () -> Unit,
     onVoiceSearch: () -> Unit,
     onScanQr: () -> Unit,
     isToolbarHiddenOnScroll: Boolean = false,
-    isIncognitoLocked: Boolean = false,
     isInPipMode: Boolean = false,
     fullscreenVideoView: View? = null,
     onExitFullscreenVideo: () -> Unit = {},
-    onUnlockIncognito: () -> Unit = {},
-    onSwitchToRegularTab: () -> Unit = {},
     onRevealToolbars: () -> Unit = {},
     onToggleTabMedia: () -> Unit = {},
     onEnterPip: () -> Unit = {},
     onShareQrCode: (String) -> Unit = {},
-    onAddToReadingList: () -> Unit = {}
+    onAddToReadingList: () -> Unit = {},
+    splitTab: TabState? = null,
+    onSwapSplitPanes: () -> Unit = {},
+    onCloseSplitPane: () -> Unit = {},
+    onSelectSplitPaneFocus: () -> Unit = {},
+    onChangeMediaSpeedBoost: (Float, Float) -> Unit = { _, _ -> },
+    onSubscribeDiscoveredFeed: (String) -> Unit = {},
+    onOpenCommandPalette: () -> Unit = {},
+    onToggleBionicReading: () -> Unit = {},
+    onAdjustReaderWidth: (Int) -> Unit = {},
+    onAdjustReaderLineHeight: (Float) -> Unit = {},
+    onSaveHighlight: () -> Unit = {}
 ) {
     var showOmniboxOverlay by remember { mutableStateOf(false) }
 
@@ -164,7 +182,10 @@ fun BrowserScreen(
         }
     }
 
-    BackHandler(enabled = fullscreenVideoView != null || showOmniboxOverlay || findInPageActive || !activeTab.isHome || activeTab.isReaderMode) {
+    BackHandler(
+        enabled = isBrowserFocused &&
+            (fullscreenVideoView != null || showOmniboxOverlay || findInPageActive || !activeTab.isHome || activeTab.isReaderMode)
+    ) {
         when {
             fullscreenVideoView != null -> onExitFullscreenVideo()
             showOmniboxOverlay -> showOmniboxOverlay = false
@@ -185,105 +206,139 @@ fun BrowserScreen(
             .background(if (activeTab.isPrivate) IncognitoColors.Backdrop else MaterialTheme.colorScheme.background)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            if (activeTab.isHome) {
-                BrowserHomeContent(
-                    isPrivate = activeTab.isPrivate,
-                    searchEngine = preferences.searchEngine,
-                    sessionBlockedCount = sessionBlockedCount,
-                    homeBookmarks = homeBookmarks,
-                    onSelectSearchEngine = onSelectSearchEngine,
-                    onTapOmnibox = { showOmniboxOverlay = true },
-                    onTapBookmark = { url -> onNavigateInput(url) },
-                    onAddHomeBookmark = { onOpenAddBookmark(true) },
-                    onOpenSanctuaryEssay = onOpenSanctuaryEssay,
-                    onOpenShields = onOpenShieldSettings,
-                    onOpenProfile = onOpenProfileSettings,
-                    onVoiceSearch = onVoiceSearch,
-                    onScanQr = onScanQr,
-                    modifier = Modifier.weight(1f)
-                )
-            } else {
-                if (!preferences.bottomOmnibox) {
-                    AnimatedVisibility(
-                        visible = showChrome,
-                        enter = expandVertically(),
-                        exit = shrinkVertically()
-                    ) {
-                        ActiveOmniboxHeader(
-                            tab = activeTab,
-                            shieldsEnabledForSite = shieldsEnabledForSite,
-                            httpsOnlyEnabled = preferences.httpsOnlyEnabled,
-                            gestureSwipeTabsEnabled = preferences.gestureSwipeTabsEnabled,
-                            gesturePullRefreshEnabled = preferences.gesturePullRefreshEnabled,
-                            gestureDoubleTapTopEnabled = preferences.gestureDoubleTapTopEnabled,
-                            onTapAddress = { showOmniboxOverlay = true },
-                            onDoubleTapAddress = onDoubleTapAddress,
-                            onSwipeTab = onSwipeTab,
-                            onTapSiteInfo = onOpenSiteInfo,
-                            onToggleSiteShields = onToggleSiteShields,
-                            onOpenShieldSettings = onOpenShieldSettings,
-                            onToggleReaderMode = onToggleReaderMode,
-                            onToggleDesktopMode = onToggleDesktopMode,
-                            onReloadOrStop = onReloadOrStop,
-                            isBottomDocked = false
-                        )
-                    }
+            if (!activeTab.isHome && !preferences.bottomOmnibox && !activeTab.isStandalonePwa) {
+                AnimatedVisibility(
+                    visible = showChrome,
+                    enter = expandVertically(),
+                    exit = shrinkVertically()
+                ) {
+                    ActiveOmniboxHeader(
+                        tab = activeTab,
+                        gestureSwipeTabsEnabled = preferences.gestureSwipeTabsEnabled,
+                        gesturePullRefreshEnabled = preferences.gesturePullRefreshEnabled,
+                        gestureDoubleTapTopEnabled = preferences.gestureDoubleTapTopEnabled,
+                        onTapAddress = { showOmniboxOverlay = true },
+                        onDoubleTapAddress = onDoubleTapAddress,
+                        onSwipeTab = onSwipeTab,
+                        onTapSiteInfo = onOpenSiteInfo,
+                        onToggleReaderMode = onToggleReaderMode,
+                        onToggleDesktopMode = onToggleDesktopMode,
+                        onReloadOrStop = onReloadOrStop,
+                        isBottomDocked = false
+                    )
                 }
+            }
 
-                if (findInPageActive && !isInPipMode) {
-                    FindInPageBar(
-                        query = findInPageQuery,
-                        currentMatch = activeTab.findMatchCurrent,
-                        totalMatches = activeTab.findMatchTotal,
-                        isPrivate = activeTab.isPrivate,
-                        onQueryChange = onFindQueryChange,
-                        onPrev = { onFindNext(false) },
-                        onNext = { onFindNext(true) },
-                        onClose = onCloseFind
+            if (!activeTab.isHome && findInPageActive && !isInPipMode) {
+                FindInPageBar(
+                    query = findInPageQuery,
+                    currentMatch = activeTab.findMatchCurrent,
+                    totalMatches = activeTab.findMatchTotal,
+                    isPrivate = activeTab.isPrivate,
+                    onQueryChange = onFindQueryChange,
+                    onPrev = { onFindNext(false) },
+                    onNext = { onFindNext(true) },
+                    onClose = onCloseFind
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .then(
+                        if (!activeTab.isHome && (preferences.bottomOmnibox || !showChrome || activeTab.isStandalonePwa) && !isInPipMode) {
+                            Modifier.statusBarsPadding()
+                        } else {
+                            Modifier
+                        }
+                    )
+            ) {
+                if (splitTab != null && !activeTab.isHome && !activeTab.isReaderMode) {
+                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                        val sideBySide = maxWidth >= 600.dp
+                        if (sideBySide) {
+                            Row(modifier = Modifier.fillMaxSize()) {
+                                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                                    PersistentMultiTabWebViewStage(
+                                        tabs = tabs,
+                                        activeTabId = activeTab.id,
+                                        excludedTabIds = setOf(splitTab.id),
+                                        touchesEnabled = isBrowserFocused,
+                                        preferences = preferences,
+                                        webViewManager = webViewManager
+                                    )
+                                }
+                                VerticalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                                    SplitSecondaryPane(
+                                        splitTab = splitTab,
+                                        preferences = preferences,
+                                        webViewManager = webViewManager,
+                                        onFocusPane = onSelectSplitPaneFocus,
+                                        onSwap = onSwapSplitPanes,
+                                        onClose = onCloseSplitPane,
+                                        onOpenJump = onOpenCommandPalette
+                                    )
+                                }
+                            }
+                        } else {
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                                    PersistentMultiTabWebViewStage(
+                                        tabs = tabs,
+                                        activeTabId = activeTab.id,
+                                        excludedTabIds = setOf(splitTab.id),
+                                        touchesEnabled = isBrowserFocused,
+                                        preferences = preferences,
+                                        webViewManager = webViewManager
+                                    )
+                                }
+                                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                                    SplitSecondaryPane(
+                                        splitTab = splitTab,
+                                        preferences = preferences,
+                                        webViewManager = webViewManager,
+                                        onFocusPane = onSelectSplitPaneFocus,
+                                        onSwap = onSwapSplitPanes,
+                                        onClose = onCloseSplitPane,
+                                        onOpenJump = onOpenCommandPalette
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    PersistentMultiTabWebViewStage(
+                        tabs = tabs,
+                        activeTabId = if (!activeTab.isHome && !activeTab.isReaderMode) activeTab.id else null,
+                        excludedTabIds = emptySet(),
+                        touchesEnabled = isBrowserFocused && !activeTab.isHome && !activeTab.isReaderMode,
+                        preferences = preferences,
+                        webViewManager = webViewManager
                     )
                 }
 
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .then(
-                            if ((preferences.bottomOmnibox || !showChrome) && !isInPipMode) {
-                                Modifier.statusBarsPadding()
-                            } else {
-                                Modifier
-                            }
-                        )
-                ) {
-                    // Keep WebView alive behind Reader View so toggling back is instantaneous
-                    key(activeTab.id) {
-                        AndroidView(
-                            modifier = Modifier.fillMaxSize(),
-                            factory = {
-                                webViewManager.getOrCreateWebView(
-                                    tab = activeTab,
-                                    javascriptEnabled = preferences.javascriptEnabled,
-                                    blockThirdPartyCookies = preferences.blockThirdPartyCookies
-                                ).apply {
-                                    layoutParams = ViewGroup.LayoutParams(
-                                        ViewGroup.LayoutParams.MATCH_PARENT,
-                                        ViewGroup.LayoutParams.MATCH_PARENT
-                                    )
-                                    if (url.isNullOrBlank() && activeTab.url.isNotBlank()) {
-                                        loadUrl(activeTab.url)
-                                    }
-                                }
-                            },
-                            update = { view: WebView ->
-                                webViewManager.applyDynamicSettings(
-                                    webView = view,
-                                    tab = activeTab,
-                                    javascriptEnabled = preferences.javascriptEnabled,
-                                    blockThirdPartyCookies = preferences.blockThirdPartyCookies
-                                )
-                            }
-                        )
-                    }
-
+                if (activeTab.isHome) {
+                    BrowserHomeContent(
+                        isPrivate = activeTab.isPrivate,
+                        searchEngine = preferences.searchEngine,
+                        homeBookmarks = homeBookmarks,
+                        topSites = topSites,
+                        onSelectSearchEngine = onSelectSearchEngine,
+                        onTapOmnibox = { showOmniboxOverlay = true },
+                        onTapBookmark = { url -> onNavigateInput(url) },
+                        onAddHomeBookmark = { onOpenAddBookmark(true) },
+                        onOpenSanctuaryEssay = onOpenSanctuaryEssay,
+                        onOpenSettings = onOpenSettings,
+                        onOpenCommandPalette = onOpenCommandPalette,
+                        onVoiceSearch = onVoiceSearch,
+                        onScanQr = onScanQr,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(if (activeTab.isPrivate) IncognitoColors.Backdrop else MaterialTheme.colorScheme.background)
+                    )
+                } else {
                     if (activeTab.loadError != null && !activeTab.isReaderMode) {
                         Surface(
                             modifier = Modifier.fillMaxSize(),
@@ -336,39 +391,161 @@ fun BrowserScreen(
                             onAdjustFontSize = onAdjustReaderFontSize,
                             onBookmarkArticle = { onOpenAddBookmark(false) },
                             onOrganizeBookmarks = onOpenBookmarksManager,
-                            onExitReader = onToggleReaderMode
+                            onExitReader = onToggleReaderMode,
+                            bionicReadingEnabled = preferences.bionicReadingEnabled,
+                            columnWidthDp = preferences.readerColumnWidthDp,
+                            lineHeightMultiplier = preferences.readerLineHeightMultiplier,
+                            onToggleBionicReading = onToggleBionicReading,
+                            onAdjustColumnWidth = onAdjustReaderWidth,
+                            onAdjustLineHeight = onAdjustReaderLineHeight,
+                            onSaveHighlight = onSaveHighlight
                         )
                     }
 
-                    // Active Media & PiP Quick Pill
-                    if (activeTab.hasActiveMedia && !isInPipMode && !activeTab.isReaderMode) {
+                    // Active Temporary Sensor Grant Badge (Camera / Mic / Location for this tab only)
+                    if (activeTab.activeSensorGrants.isNotEmpty() && !activeTab.isReaderMode && !isInPipMode) {
                         Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.95f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
                             shadowElevation = 4.dp,
                             modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(horizontal = 14.dp, vertical = 10.dp)
+                                .testTag("temporary_sensor_grant_pill")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Lock,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "Temp access: ${activeTab.activeSensorGrants.joinToString(", ")} • Auto-revokes",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+
+                    // Active Media, Speed, Boost & PiP Quick Pill
+                    if (activeTab.hasActiveMedia && !isInPipMode && !activeTab.isReaderMode) {
+                        val speedSteps = listOf(1.0f, 1.25f, 1.5f, 2.0f, 0.75f)
+                        val nextSpeed = speedSteps.getOrElse(
+                            (speedSteps.indexOfFirst { kotlin.math.abs(it - activeTab.mediaSpeed) < 0.05f } + 1)
+                        ) { 1.0f }
+                        val nextBoost = if (activeTab.audioBoost > 1.2f) 1.0f else 2.0f
+
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            shadowElevation = 3.dp,
+                            modifier = Modifier
                                 .align(Alignment.BottomStart)
-                                .padding(12.dp)
+                                .padding(10.dp)
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 4.dp)
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
-                                IconButton(onClick = onToggleTabMedia, modifier = Modifier.size(40.dp)) {
+                                IconButton(onClick = onToggleTabMedia, modifier = Modifier.size(34.dp)) {
                                     Icon(
                                         imageVector = if (activeTab.isPlayingMedia) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                                         contentDescription = if (activeTab.isPlayingMedia) "Pause webpage media" else "Play webpage media",
-                                        tint = MaterialTheme.colorScheme.primary
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
-                                IconButton(onClick = onEnterPip, modifier = Modifier.size(40.dp)) {
+                                Surface(
+                                    onClick = { onChangeMediaSpeedBoost(nextSpeed, activeTab.audioBoost) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                                ) {
+                                    Text(
+                                        text = "${String.format("%.2g", activeTab.mediaSpeed)}x",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+                                    )
+                                }
+                                Surface(
+                                    onClick = { onChangeMediaSpeedBoost(activeTab.mediaSpeed, nextBoost) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (activeTab.audioBoost > 1.2f) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.surfaceVariant
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.VolumeUp,
+                                            contentDescription = "Audio Boost",
+                                            tint = if (activeTab.audioBoost > 1.2f) MaterialTheme.colorScheme.onPrimary
+                                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Text(
+                                            text = if (activeTab.audioBoost > 1.2f) "2x" else "Boost",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (activeTab.audioBoost > 1.2f) MaterialTheme.colorScheme.onPrimary
+                                            else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                IconButton(onClick = onEnterPip, modifier = Modifier.size(34.dp)) {
                                     Icon(
                                         imageVector = Icons.Rounded.PictureInPictureAlt,
                                         contentDescription = "Enter Picture-in-Picture",
-                                        tint = MaterialTheme.colorScheme.onSurface
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.size(17.dp)
                                     )
                                 }
+                            }
+                        }
+                    }
+
+                    // Discovered RSS / Atom Feed Chip
+                    val discoveredFeed = activeTab.discoveredFeedUrl
+                    if (!discoveredFeed.isNullOrBlank() && !isInPipMode && !activeTab.isReaderMode) {
+                        Surface(
+                            onClick = { onSubscribeDiscoveredFeed(discoveredFeed) },
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
+                            shadowElevation = 3.dp,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(end = 10.dp, bottom = if (!showChrome) 56.dp else 10.dp)
+                                .testTag("discovered_rss_chip")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.RssFeed,
+                                    contentDescription = "Subscribe to RSS Feed",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "Follow RSS",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
                             }
                         }
                     }
@@ -380,50 +557,47 @@ fun BrowserScreen(
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                            shadowElevation = 6.dp,
+                            shadowElevation = 4.dp,
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
                                 .navigationBarsPadding()
-                                .padding(14.dp)
-                                .size(44.dp)
+                                .padding(10.dp)
+                                .size(38.dp)
                                 .testTag("reveal_toolbars_button")
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     Icons.Rounded.KeyboardArrowUp,
                                     contentDescription = "Show address bar",
-                                    tint = MaterialTheme.colorScheme.primary
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
                     }
                 }
+            }
 
-                if (preferences.bottomOmnibox) {
-                    AnimatedVisibility(
-                        visible = showChrome,
-                        enter = expandVertically(),
-                        exit = shrinkVertically()
-                    ) {
-                        ActiveOmniboxHeader(
-                            tab = activeTab,
-                            shieldsEnabledForSite = shieldsEnabledForSite,
-                            httpsOnlyEnabled = preferences.httpsOnlyEnabled,
-                            gestureSwipeTabsEnabled = preferences.gestureSwipeTabsEnabled,
-                            gesturePullRefreshEnabled = preferences.gesturePullRefreshEnabled,
-                            gestureDoubleTapTopEnabled = preferences.gestureDoubleTapTopEnabled,
-                            onTapAddress = { showOmniboxOverlay = true },
-                            onDoubleTapAddress = onDoubleTapAddress,
-                            onSwipeTab = onSwipeTab,
-                            onTapSiteInfo = onOpenSiteInfo,
-                            onToggleSiteShields = onToggleSiteShields,
-                            onOpenShieldSettings = onOpenShieldSettings,
-                            onToggleReaderMode = onToggleReaderMode,
-                            onToggleDesktopMode = onToggleDesktopMode,
-                            onReloadOrStop = onReloadOrStop,
-                            isBottomDocked = true
-                        )
-                    }
+            if (!activeTab.isHome && preferences.bottomOmnibox && !activeTab.isStandalonePwa) {
+                AnimatedVisibility(
+                    visible = showChrome,
+                    enter = expandVertically(),
+                    exit = shrinkVertically()
+                ) {
+                    ActiveOmniboxHeader(
+                        tab = activeTab,
+                        gestureSwipeTabsEnabled = preferences.gestureSwipeTabsEnabled,
+                        gesturePullRefreshEnabled = preferences.gesturePullRefreshEnabled,
+                        gestureDoubleTapTopEnabled = preferences.gestureDoubleTapTopEnabled,
+                        onTapAddress = { showOmniboxOverlay = true },
+                        onDoubleTapAddress = onDoubleTapAddress,
+                        onSwipeTab = onSwipeTab,
+                        onTapSiteInfo = onOpenSiteInfo,
+                        onToggleReaderMode = onToggleReaderMode,
+                        onToggleDesktopMode = onToggleDesktopMode,
+                        onReloadOrStop = onReloadOrStop,
+                        isBottomDocked = true
+                    )
                 }
             }
 
@@ -459,13 +633,6 @@ fun BrowserScreen(
                     onOpenQuickControls = onOpenQuickControls
                 )
             }
-        }
-
-        if (activeTab.isPrivate && isIncognitoLocked && preferences.biometricIncognitoLock && !isInPipMode) {
-            BiometricLockScreenOverlay(
-                onUnlock = onUnlockIncognito,
-                onExitPrivateMode = onSwitchToRegularTab
-            )
         }
 
         if (showOmniboxOverlay) {
@@ -505,11 +672,221 @@ fun BrowserScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black)
+                    .background(Color(0xFF141917))
             ) {
-                AndroidView(
-                    factory = { videoView },
-                    modifier = Modifier.fillMaxSize()
+                key(videoView) {
+                    AndroidView(
+                        factory = {
+                            (videoView.parent as? ViewGroup)?.removeView(videoView)
+                            videoView
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+    }
+}
+
+private class MultiTabWebViewHostLayout(context: Context) : FrameLayout(context) {
+    var activeTabId: String? = null
+    var touchesEnabled: Boolean = true
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (!touchesEnabled) return false
+        val targetId = activeTabId ?: return false
+        for (i in childCount - 1 downTo 0) {
+            val child = getChildAt(i)
+            if (child.tag == targetId && child.visibility == View.VISIBLE && child.alpha > 0.1f) {
+                return child.dispatchTouchEvent(ev)
+            }
+        }
+        return false
+    }
+}
+
+@Composable
+private fun PersistentMultiTabWebViewStage(
+    tabs: List<TabState>,
+    activeTabId: String?,
+    excludedTabIds: Set<String>,
+    touchesEnabled: Boolean,
+    preferences: BrowserPreferences,
+    webViewManager: WebViewManager
+) {
+    AndroidView(
+        modifier = Modifier.fillMaxSize(),
+        factory = { ctx -> MultiTabWebViewHostLayout(ctx) },
+        update = { host: MultiTabWebViewHostLayout ->
+            host.activeTabId = activeTabId
+            host.touchesEnabled = touchesEnabled
+
+            val liveTabs = tabs.filter { tab ->
+                !tab.isHome &&
+                    tab.id !in excludedTabIds &&
+                    (tab.id == activeTabId || tab.isPlayingMedia || tab.hasActiveMedia || webViewManager.hasLiveWebView(tab.id))
+            }
+            val desiredIds = liveTabs.map { it.id }.toSet()
+
+            // Remove closed or excluded WebViews from this host
+            for (i in host.childCount - 1 downTo 0) {
+                val child = host.getChildAt(i)
+                val tagId = child.tag as? String
+                if (tagId == null || tagId !in desiredIds) {
+                    host.removeViewAt(i)
+                }
+            }
+
+            // Attach & update each live tab WebView without detaching background tabs
+            liveTabs.forEach { tab ->
+                val webView = webViewManager.getOrCreateWebView(
+                    tab = tab,
+                    javascriptEnabled = preferences.javascriptEnabled,
+                    blockThirdPartyCookies = preferences.blockThirdPartyCookies
+                )
+                webView.tag = tab.id
+                if (webView.parent !== host) {
+                    (webView.parent as? ViewGroup)?.removeView(webView)
+                    host.addView(
+                        webView,
+                        FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                    )
+                }
+                val isFocused = tab.id == activeTabId
+                webView.visibility = View.VISIBLE
+                webView.alpha = if (isFocused) 1f else 0f
+                webView.translationZ = if (isFocused) 1f else 0f
+                webView.isClickable = isFocused && touchesEnabled
+                webView.isFocusable = isFocused && touchesEnabled
+                webView.isFocusableInTouchMode = isFocused && touchesEnabled
+                if (isFocused) {
+                    webView.bringToFront()
+                }
+                if (webView.url.isNullOrBlank() && tab.url.isNotBlank()) {
+                    webView.loadUrl(tab.url)
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun WebViewPaneContent(
+    tab: TabState,
+    preferences: BrowserPreferences,
+    webViewManager: WebViewManager
+) {
+    key(tab.id) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = {
+                webViewManager.getOrCreateWebView(
+                    tab = tab,
+                    javascriptEnabled = preferences.javascriptEnabled,
+                    blockThirdPartyCookies = preferences.blockThirdPartyCookies
+                ).apply {
+                    (parent as? ViewGroup)?.removeView(this)
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    alpha = 1f
+                    visibility = View.VISIBLE
+                    if (url.isNullOrBlank() && tab.url.isNotBlank()) {
+                        loadUrl(tab.url)
+                    }
+                }
+            },
+            update = { view: WebView ->
+                webViewManager.applyDynamicSettings(
+                    webView = view,
+                    tab = tab,
+                    javascriptEnabled = preferences.javascriptEnabled,
+                    blockThirdPartyCookies = preferences.blockThirdPartyCookies
+                )
+            }
+        )
+    }
+}
+
+@Composable
+private fun SplitSecondaryPane(
+    splitTab: TabState,
+    preferences: BrowserPreferences,
+    webViewManager: WebViewManager,
+    onFocusPane: () -> Unit,
+    onSwap: () -> Unit,
+    onClose: () -> Unit,
+    onOpenJump: () -> Unit
+) {
+    val ext = LocalRitamExtendedColors.current
+    Column(modifier = Modifier.fillMaxSize()) {
+        Surface(
+            color = ext.surfaceLow,
+            border = BorderStroke(0.5.dp, ext.cardBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onFocusPane)
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = if (splitTab.isHome) "Split Pane • Tap Jump" else splitTab.domain.ifBlank { splitTab.title },
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = onFocusPane) {
+                        Text("Focus", style = MaterialTheme.typography.labelSmall)
+                    }
+                    IconButton(onClick = onSwap, modifier = Modifier.size(34.dp)) {
+                        Icon(Icons.Rounded.SwapHoriz, contentDescription = "Swap panes", modifier = Modifier.size(16.dp))
+                    }
+                    IconButton(onClick = onClose, modifier = Modifier.size(34.dp)) {
+                        Icon(Icons.Rounded.Close, contentDescription = "Close split view", modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+        }
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            if (splitTab.isHome) {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(20.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Secondary Split Pane Ready",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "Open a page from Command Palette or tap Focus to browse here.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedButton(onClick = onOpenJump) {
+                        Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Command Palette")
+                    }
+                }
+            } else {
+                WebViewPaneContent(
+                    tab = splitTab,
+                    preferences = preferences,
+                    webViewManager = webViewManager
                 )
             }
         }
@@ -520,15 +897,15 @@ fun BrowserScreen(
 private fun BrowserHomeContent(
     isPrivate: Boolean,
     searchEngine: SearchEngine,
-    sessionBlockedCount: Long,
     homeBookmarks: List<BookmarkEntity>,
+    topSites: List<SiteUsageEntity> = emptyList(),
     onSelectSearchEngine: (SearchEngine) -> Unit,
     onTapOmnibox: () -> Unit,
     onTapBookmark: (String) -> Unit,
     onAddHomeBookmark: () -> Unit,
     onOpenSanctuaryEssay: () -> Unit,
-    onOpenShields: () -> Unit,
-    onOpenProfile: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenCommandPalette: () -> Unit = {},
     onVoiceSearch: () -> Unit,
     onScanQr: () -> Unit,
     modifier: Modifier = Modifier
@@ -544,24 +921,24 @@ private fun BrowserHomeContent(
         modifier = modifier
             .fillMaxSize()
             .statusBarsPadding()
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Top Header: Ritam • BROWSER HOME / INCOGNITO + Shield + Profile Avatar
+        // Top Header: Ritam • BROWSER HOME / INCOGNITO + Command Palette + Settings
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 10.dp),
+                .padding(top = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
                     text = "Ritam",
-                    style = MaterialTheme.typography.headlineSmall.copy(
+                    style = MaterialTheme.typography.titleLarge.copy(
                         fontFamily = NewsreaderFamily,
                         fontWeight = FontWeight.Medium
                     ),
@@ -569,24 +946,25 @@ private fun BrowserHomeContent(
                 )
                 Box(
                     modifier = Modifier
-                        .size(5.dp)
+                        .size(4.dp)
                         .clip(CircleShape)
                         .background(accentColor)
                 )
                 if (isPrivate) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         IncognitoSpectsEmblem(
-                            size = 16.dp,
+                            size = 14.dp,
                             tint = IncognitoColors.Accent,
                             hatFill = IncognitoColors.SurfaceElevated
                         )
                         Text(
                             text = "INCOGNITO",
                             style = MaterialTheme.typography.labelSmall.copy(
-                                letterSpacing = 1.4.sp,
+                                fontSize = 10.sp,
+                                letterSpacing = 1.1.sp,
                                 fontWeight = FontWeight.SemiBold
                             ),
                             color = IncognitoColors.Accent
@@ -596,7 +974,8 @@ private fun BrowserHomeContent(
                     Text(
                         text = "BROWSER HOME",
                         style = MaterialTheme.typography.labelSmall.copy(
-                            letterSpacing = 1.4.sp,
+                            fontSize = 10.sp,
+                            letterSpacing = 1.1.sp,
                             fontWeight = FontWeight.Medium
                         ),
                         color = mutedText
@@ -606,65 +985,42 @@ private fun BrowserHomeContent(
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Surface(
-                    onClick = onOpenShields,
-                    shape = RoundedCornerShape(16.dp),
+                    onClick = onOpenCommandPalette,
+                    shape = CircleShape,
                     color = surfaceColor,
                     border = BorderStroke(1.dp, borderColor),
                     modifier = Modifier
-                        .height(38.dp)
-                        .testTag("home_shield_button")
+                        .size(32.dp)
+                        .testTag("home_command_palette_button")
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
+                    Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            Icons.Rounded.Shield,
-                            contentDescription = "Ritam Shields",
-                            tint = accentColor,
+                            Icons.Rounded.Search,
+                            contentDescription = "Quick Command Palette",
+                            tint = mutedText,
                             modifier = Modifier.size(16.dp)
                         )
-                        if (sessionBlockedCount > 0) {
-                            Text(
-                                text = sessionBlockedCount.toString(),
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = primaryText
-                            )
-                        }
                     }
                 }
 
                 Surface(
-                    onClick = onOpenProfile,
+                    onClick = onOpenSettings,
                     shape = CircleShape,
+                    color = surfaceColor,
                     border = BorderStroke(1.dp, borderColor),
                     modifier = Modifier
-                        .size(38.dp)
-                        .testTag("home_profile_button")
+                        .size(32.dp)
+                        .testTag("home_settings_button")
                 ) {
-                    if (isPrivate) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(IncognitoColors.SurfaceElevated),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            IncognitoSpectsEmblem(
-                                size = 22.dp,
-                                tint = IncognitoColors.Accent,
-                                hatFill = IncognitoColors.Surface
-                            )
-                        }
-                    } else {
-                        AsyncImage(
-                            model = RITAM_AVATAR_URL,
-                            contentDescription = "Profile & Settings",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Rounded.Settings,
+                            contentDescription = "Settings",
+                            tint = mutedText,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
@@ -684,85 +1040,85 @@ private fun BrowserHomeContent(
                     shape = CircleShape,
                     color = IncognitoColors.SurfaceElevated,
                     border = BorderStroke(1.dp, IncognitoColors.Border),
-                    modifier = Modifier.size(92.dp)
+                    modifier = Modifier.size(64.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         IncognitoSpectsEmblem(
-                            size = 64.dp,
+                            size = 44.dp,
                             tint = IncognitoColors.Accent,
                             hatFill = IncognitoColors.Surface
                         )
                     }
                 }
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(10.dp))
                 Text(
                     text = "You've gone Incognito",
-                    style = MaterialTheme.typography.headlineMedium.copy(
+                    style = MaterialTheme.typography.headlineSmall.copy(
                         fontFamily = NewsreaderFamily,
                         fontStyle = FontStyle.Italic,
                         fontWeight = FontWeight.Normal
                     ),
                     color = IncognitoColors.OnSurface
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(14.dp),
                     color = IncognitoColors.Surface,
                     border = BorderStroke(1.dp, IncognitoColors.Border),
                     modifier = Modifier
-                        .widthIn(max = 360.dp)
+                        .widthIn(max = 320.dp)
                         .fillMaxWidth()
                 ) {
                     Column(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
                         Text(
                             text = "• History, searches & cookies clear on tab close",
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.labelSmall,
                             color = IncognitoColors.OnSurfaceMuted
                         )
                         Text(
-                            text = "• Ritam Shields & HTTPS-Only stay fully active",
-                            style = MaterialTheme.typography.bodySmall,
+                            text = "• System protections & encrypted connections stay active",
+                            style = MaterialTheme.typography.labelSmall,
                             color = IncognitoColors.OnSurfaceMuted
                         )
                     }
                 }
             } else {
-                LotusEmblem(size = 82.dp)
-                Spacer(Modifier.height(14.dp))
+                LotusEmblem(size = 58.dp)
+                Spacer(Modifier.height(8.dp))
                 Text(
                     text = "Breathe & Discover",
-                    style = MaterialTheme.typography.headlineMedium.copy(
+                    style = MaterialTheme.typography.headlineSmall.copy(
                         fontFamily = NewsreaderFamily,
                         fontStyle = FontStyle.Italic,
                         fontWeight = FontWeight.Normal
                     ),
                     color = primaryText
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 Surface(
                     onClick = onOpenSanctuaryEssay,
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(16.dp),
                     color = surfaceColor,
                     border = BorderStroke(1.dp, borderColor),
                     modifier = Modifier.testTag("home_sanctuary_essay_chip")
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         Icon(
                             Icons.AutoMirrored.Rounded.MenuBook,
                             contentDescription = null,
                             tint = accentColor,
-                            modifier = Modifier.size(15.dp)
+                            modifier = Modifier.size(13.dp)
                         )
                         Text(
                             text = "Sanctuary Essay • Reader Showcase",
-                            style = MaterialTheme.typography.labelMedium,
+                            style = MaterialTheme.typography.labelSmall,
                             color = mutedText
                         )
                     }
@@ -770,23 +1126,23 @@ private fun BrowserHomeContent(
             }
         }
 
-        // Thumb-anchored Search Pill with Search Engine Logo Switcher
+        // Compact Search Pill with Search Engine Logo Switcher
         Surface(
             onClick = onTapOmnibox,
-            shape = RoundedCornerShape(30.dp),
+            shape = RoundedCornerShape(22.dp),
             color = surfaceColor,
             border = BorderStroke(1.dp, borderColor),
-            shadowElevation = 4.dp,
+            shadowElevation = 3.dp,
             modifier = Modifier
-                .widthIn(max = 560.dp)
+                .widthIn(max = 460.dp)
                 .fillMaxWidth()
-                .height(58.dp)
+                .height(44.dp)
                 .testTag("home_search_pill")
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(start = 10.dp, end = 8.dp),
+                    .padding(start = 6.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 SearchEngineSelectorPillButton(
@@ -794,10 +1150,10 @@ private fun BrowserHomeContent(
                     onSelectEngine = onSelectSearchEngine,
                     isPrivate = isPrivate
                 )
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(8.dp))
                 Text(
                     text = if (isPrivate) "Search ${searchEngine.displayName} privately" else "Search or enter address",
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = mutedText,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -806,106 +1162,112 @@ private fun BrowserHomeContent(
                 IconButton(
                     onClick = onVoiceSearch,
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(36.dp)
                         .testTag("home_voice_button")
                 ) {
                     Icon(
                         Icons.Rounded.Mic,
                         contentDescription = "Voice search",
                         tint = mutedText,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(17.dp)
                     )
                 }
                 IconButton(
                     onClick = onScanQr,
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(36.dp)
                         .testTag("home_qr_button")
                 ) {
                     Icon(
                         Icons.Rounded.QrCodeScanner,
                         contentDescription = "Scan QR code",
                         tint = mutedText,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(17.dp)
                     )
                 }
             }
         }
 
-        Spacer(Modifier.height(22.dp))
+        Spacer(Modifier.height(14.dp))
 
-        // SANCTUARY BOOKMARKS 4-column grid
+        // PINNED & TOP SITES 4-column grid ranked by analytics + pinned bookmarks
+        val homeShortcuts = remember(homeBookmarks, topSites) {
+            SiteShortcutPlanner.mergePinnedAndTopSites(homeBookmarks, topSites, maxSlots = 7)
+        }
+        val topAnalyticsCount = remember(homeShortcuts) { homeShortcuts.count { it.isAnalyticsTop } }
         Row(
             modifier = Modifier
-                .widthIn(max = 560.dp)
+                .widthIn(max = 460.dp)
                 .fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "SANCTUARY BOOKMARKS",
+                text = if (topAnalyticsCount > 0) "PINNED & MOST VISITED" else "PINNED SITES",
                 style = MaterialTheme.typography.labelSmall.copy(
-                    letterSpacing = 1.4.sp,
+                    fontSize = 10.sp,
+                    letterSpacing = 1.2.sp,
                     fontWeight = FontWeight.SemiBold
                 ),
                 color = mutedText
             )
             Text(
-                text = "${homeBookmarks.size} pinned",
-                style = MaterialTheme.typography.labelSmall,
+                text = if (topAnalyticsCount > 0) "${homeShortcuts.size} shortcuts • $topAnalyticsCount top" else "${homeShortcuts.size} pinned",
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                 color = mutedText
             )
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
 
-        val visibleBookmarks = remember(homeBookmarks) { homeBookmarks.take(7) }
         LazyVerticalGrid(
             columns = GridCells.Fixed(4),
             modifier = Modifier
-                .widthIn(max = 560.dp)
+                .widthIn(max = 460.dp)
                 .fillMaxWidth()
-                .height(176.dp),
-            contentPadding = PaddingValues(bottom = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                .height(142.dp),
+            contentPadding = PaddingValues(bottom = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             userScrollEnabled = false
         ) {
-            items(visibleBookmarks, key = { it.id }) { bm ->
+            items(homeShortcuts, key = { it.key }) { shortcut ->
                 HomeBookmarkTile(
-                    title = bm.title,
-                    monogram = bm.iconKey.take(2),
+                    title = shortcut.title,
+                    monogram = shortcut.iconKey,
+                    visitCount = shortcut.visitCount,
                     isPrivate = isPrivate,
-                    onClick = { onTapBookmark(bm.url) }
+                    onClick = { onTapBookmark(shortcut.url) }
                 )
             }
             item {
                 Column(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .clickable(onClick = onAddHomeBookmark)
-                        .padding(4.dp)
+                        .padding(3.dp)
                         .testTag("home_add_bookmark_tile"),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(12.dp),
                         color = surfaceColor,
                         border = BorderStroke(1.dp, borderColor),
-                        modifier = Modifier.size(52.dp)
+                        modifier = Modifier.size(42.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 Icons.Rounded.Add,
                                 contentDescription = "Add Bookmark",
-                                tint = accentColor
+                                tint = accentColor,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(4.dp))
                     Text(
                         text = "Add",
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                         color = mutedText,
                         maxLines = 1
                     )
@@ -919,6 +1281,7 @@ private fun BrowserHomeContent(
 private fun HomeBookmarkTile(
     title: String,
     monogram: String,
+    visitCount: Long = 0L,
     isPrivate: Boolean = false,
     onClick: () -> Unit
 ) {
@@ -930,33 +1293,44 @@ private fun HomeBookmarkTile(
 
     Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
-            .padding(4.dp)
+            .padding(3.dp)
             .testTag("home_bookmark_${title.lowercase().replace(" ", "_")}"),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = surfaceColor,
-            border = BorderStroke(1.dp, borderColor),
-            modifier = Modifier.size(52.dp)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text(
-                    text = monogram,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontFamily = NewsreaderFamily,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = accentColor
+        Box(contentAlignment = Alignment.TopEnd) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = surfaceColor,
+                border = BorderStroke(1.dp, borderColor),
+                modifier = Modifier.size(42.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = monogram,
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontFamily = NewsreaderFamily,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = accentColor
+                    )
+                }
+            }
+            if (visitCount > 0L) {
+                Box(
+                    modifier = Modifier
+                        .padding(3.dp)
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(accentColor)
                 )
             }
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
         Text(
             text = title,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
             color = textColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

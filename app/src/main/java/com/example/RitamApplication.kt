@@ -41,7 +41,13 @@ class AppContainer(context: Context) {
             blockingStatsDao = database.blockingStatsDao(),
             searchHistoryDao = database.searchHistoryDao(),
             vaultDao = database.vaultDao(),
-            readingListDao = database.readingListDao()
+            readingListDao = database.readingListDao(),
+            userscriptDao = database.userscriptDao(),
+            watchlistDao = database.watchlistDao(),
+            highlightDao = database.highlightDao(),
+            rssDao = database.rssDao(),
+            siteUsageDao = database.siteUsageDao(),
+            quickControlUsageDao = database.quickControlUsageDao()
         )
     }
 
@@ -55,6 +61,10 @@ class AppContainer(context: Context) {
 
     val downloadManager: BrowserDownloadManager by lazy {
         BrowserDownloadManager(appContext, browserRepository, notificationManager)
+    }
+
+    val mediaSessionHelper: com.example.services.MediaSessionHelper by lazy {
+        com.example.services.MediaSessionHelper(appContext, notificationManager)
     }
 }
 

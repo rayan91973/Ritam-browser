@@ -1,8 +1,5 @@
 package com.example.ui.screens
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -27,10 +24,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AutoDelete
+import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.Restore
+import androidx.compose.material.icons.rounded.RssFeed
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Translate
+import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
@@ -49,28 +50,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
-import com.example.data.local.CustomFilterRuleEntity
-import com.example.data.local.FilterListEntity
-import com.example.data.local.VaultEntryEntity
-import com.example.data.local.WebsiteSettingsEntity
+import com.example.data.local.SiteUsageEntity
 import com.example.data.preferences.AccentTone
 import com.example.data.preferences.BrowserPreferences
 import com.example.data.preferences.CornerTopology
 import com.example.data.preferences.FontPairing
 import com.example.data.preferences.LayoutDensity
 import com.example.data.preferences.OmniboxTopology
-import com.example.data.preferences.ProfilePersona
 import com.example.data.preferences.SearchEngine
 import com.example.data.preferences.ThemePalette
-import com.example.privacy.DnsProvider
-import com.example.privacy.DohResolutionResult
 import com.example.privacy.SessionShieldMetrics
+import com.example.services.AppCacheStats
 import com.example.services.TranslationHelper
 import com.example.ui.theme.LocalRitamExtendedColors
 import com.example.ui.theme.NewsreaderFamily
@@ -79,11 +72,8 @@ enum class SettingsFocusSection(val label: String) {
     ALL("All"),
     ANALYTICS("Analytics"),
     APPEARANCE("Appearance"),
-    SHIELDS("Shields"),
-    NOTIFICATIONS("Notifications"),
-    GESTURES("Gestures"),
-    VAULT("Vault & Profiles"),
-    BROWSER("Browser")
+    BROWSER("Browser"),
+    ABOUT("About")
 }
 
 @Composable
@@ -95,10 +85,6 @@ fun SettingsAnalyticsScreen(
     totalBytesSaved: Long,
     sessionMetrics: SessionShieldMetrics,
     openTabsCount: Int,
-    filterLists: List<FilterListEntity>,
-    customRules: List<CustomFilterRuleEntity>,
-    websiteSettings: List<WebsiteSettingsEntity>,
-    vaultEntries: List<VaultEntryEntity>,
     onBack: () -> Unit,
     onSelectPalette: (ThemePalette) -> Unit,
     onSelectAccent: (AccentTone) -> Unit,
@@ -114,84 +100,36 @@ fun SettingsAnalyticsScreen(
     onSelectSearchEngine: (SearchEngine) -> Unit,
     onSaveHomepageUrl: (String) -> Unit,
     onToggleDefaultDesktop: (Boolean) -> Unit,
-    onToggleAdBlock: (Boolean) -> Unit,
-    onToggleCosmeticAdBlock: (Boolean) -> Unit,
-    onToggleTrackerBlock: (Boolean) -> Unit,
-    onToggleMalicious: (Boolean) -> Unit,
-    onToggleHttpsOnly: (Boolean) -> Unit,
-    onToggleJs: (Boolean) -> Unit,
-    onToggleThirdPartyCookies: (Boolean) -> Unit,
-    onToggleFilterList: (Long, Boolean) -> Unit,
-    onAddCustomRule: (String) -> Unit,
-    onToggleCustomRule: (Long, Boolean) -> Unit,
-    onDeleteCustomRule: (Long) -> Unit,
     onToggleLocalTelemetry: (Boolean) -> Unit,
-    onToggleNotificationsEnabled: (Boolean) -> Unit,
-    onToggleDownloadNotifications: (Boolean) -> Unit,
-    onToggleShieldAlerts: (Boolean) -> Unit,
-    onToggleBlockSitePrompts: (Boolean) -> Unit,
-    onSendTestNotification: () -> Unit,
-    onToggleSwipeNav: (Boolean) -> Unit,
-    onToggleSwipeTabs: (Boolean) -> Unit,
-    onTogglePullRefresh: (Boolean) -> Unit,
-    onToggleDoubleTapTop: (Boolean) -> Unit,
-    onOpenWidgetPreview: () -> Unit,
-    onSelectProfile: (ProfilePersona) -> Unit,
-    onToggleBiometric: (Boolean) -> Unit,
-    onToggleAutofill: (Boolean) -> Unit,
-    onAddVaultEntry: () -> Unit,
-    onCopySecret: (String) -> Unit,
-    onDeleteVaultEntry: (Long) -> Unit,
     onOpenBookmarksManager: () -> Unit,
     onOpenClearData: () -> Unit,
-    dohTestResult: DohResolutionResult? = null,
-    isVaultUnlocked: Boolean = false,
-    onUnlockVault: () -> Unit = {},
     onToggleForceWebDark: (Boolean) -> Unit = {},
     onToggleBottomOmnibox: (Boolean) -> Unit = {},
     onToggleAutoHideToolbars: (Boolean) -> Unit = {},
-    onToggleCookieBanners: (Boolean) -> Unit = {},
-    onToggleStripTracking: (Boolean) -> Unit = {},
-    onToggleConfirmExternalApp: (Boolean) -> Unit = {},
-    onSelectDnsProvider: (DnsProvider) -> Unit = {},
-    onSaveCustomDohUrl: (String) -> Unit = {},
-    onTestDoh: () -> Unit = {},
-    onToggleBiometricIncognito: (Boolean) -> Unit = {},
     onToggleClearOnExit: (Boolean) -> Unit = {},
     onChangeAutoCloseDays: (Int) -> Unit = {},
-    onSelectTranslateLanguage: (String) -> Unit = {}
+    onSelectTranslateLanguage: (String) -> Unit = {},
+    onExportConfigBackupUri: (android.net.Uri) -> Unit = {},
+    onImportConfigBackupUri: (android.net.Uri) -> Unit = {},
+    onOpenWatchlist: () -> Unit = {},
+    onOpenFeeds: () -> Unit = {},
+    cacheStats: AppCacheStats = AppCacheStats(),
+    topSites: List<SiteUsageEntity> = emptyList(),
+    onClearAppCache: () -> Unit = {},
+    onClearSiteUsage: () -> Unit = {},
+    onOpenSiteUrl: (String) -> Unit = {}
 ) {
     val ext = LocalRitamExtendedColors.current
-    val context = LocalContext.current
     var activeSection by remember(initialSection) { mutableStateOf(initialSection) }
     var homepageDraft by remember(preferences.homepageUrl) { mutableStateOf(preferences.homepageUrl) }
 
-    var hasSystemNotificationPermission by remember {
-        mutableStateOf(
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-            } else {
-                NotificationManagerCompat.from(context).areNotificationsEnabled()
-            }
-        )
-    }
+    val exportBackupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri -> uri?.let(onExportConfigBackupUri) }
 
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        hasSystemNotificationPermission = granted
-        if (granted) {
-            onToggleNotificationsEnabled(true)
-        }
-    }
-
-    val requestNotificationPermission = {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        } else {
-            hasSystemNotificationPermission = NotificationManagerCompat.from(context).areNotificationsEnabled()
-        }
-    }
+    val importBackupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> uri?.let(onImportConfigBackupUri) }
 
     Column(
         modifier = Modifier
@@ -203,26 +141,30 @@ fun SettingsAnalyticsScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
+                .padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(
                 onClick = onBack,
-                modifier = Modifier.size(48.dp).testTag("settings_back_button")
+                modifier = Modifier.size(40.dp).testTag("settings_back_button")
             ) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                Icon(
+                    Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "Back",
+                    modifier = Modifier.size(20.dp)
+                )
             }
             Column {
                 Text(
                     text = "Analytics & Personalization",
-                    style = MaterialTheme.typography.titleLarge.copy(
+                    style = MaterialTheme.typography.titleMedium.copy(
                         fontFamily = NewsreaderFamily,
                         fontWeight = FontWeight.Medium
                     )
                 )
                 Text(
-                    text = "Ritam Engine • Privacy, Topology & Vault",
-                    style = MaterialTheme.typography.bodySmall,
+                    text = "Ritam Engine • Appearance, Browser & About",
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -232,14 +174,14 @@ fun SettingsAnalyticsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = 12.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             SettingsFocusSection.entries.forEach { sec ->
                 FilterChip(
                     selected = activeSection == sec,
                     onClick = { activeSection = sec },
-                    label = { Text(sec.label) },
+                    label = { Text(sec.label, style = MaterialTheme.typography.labelSmall) },
                     modifier = Modifier.testTag("settings_chip_${sec.name.lowercase()}")
                 )
             }
@@ -259,7 +201,12 @@ fun SettingsAnalyticsScreen(
                         sessionMetrics = sessionMetrics,
                         openTabsCount = openTabsCount,
                         localTelemetryEnabled = preferences.localTelemetryEnabled,
-                        onToggleLocalTelemetry = onToggleLocalTelemetry
+                        onToggleLocalTelemetry = onToggleLocalTelemetry,
+                        cacheStats = cacheStats,
+                        topSites = topSites,
+                        onClearAppCache = onClearAppCache,
+                        onClearSiteUsage = onClearSiteUsage,
+                        onOpenSiteUrl = onOpenSiteUrl
                     )
                 }
             }
@@ -282,81 +229,6 @@ fun SettingsAnalyticsScreen(
                         onToggleForceWebDark = onToggleForceWebDark,
                         onToggleBottomOmnibox = onToggleBottomOmnibox,
                         onToggleAutoHideToolbars = onToggleAutoHideToolbars
-                    )
-                }
-            }
-
-            if (activeSection == SettingsFocusSection.ALL || activeSection == SettingsFocusSection.SHIELDS) {
-                item {
-                    ShieldsAndRulesSection(
-                        preferences = preferences,
-                        filterLists = filterLists,
-                        customRules = customRules,
-                        websiteSettings = websiteSettings,
-                        onToggleAdBlock = onToggleAdBlock,
-                        onToggleCosmeticAdBlock = onToggleCosmeticAdBlock,
-                        onToggleTrackerBlock = onToggleTrackerBlock,
-                        onToggleMalicious = onToggleMalicious,
-                        onToggleHttpsOnly = onToggleHttpsOnly,
-                        onToggleJs = onToggleJs,
-                        onToggleThirdPartyCookies = onToggleThirdPartyCookies,
-                        onToggleFilterList = onToggleFilterList,
-                        onAddCustomRule = onAddCustomRule,
-                        onToggleCustomRule = onToggleCustomRule,
-                        onDeleteCustomRule = onDeleteCustomRule,
-                        dohTestResult = dohTestResult,
-                        onToggleCookieBanners = onToggleCookieBanners,
-                        onToggleStripTracking = onToggleStripTracking,
-                        onToggleConfirmExternalApp = onToggleConfirmExternalApp,
-                        onSelectDnsProvider = onSelectDnsProvider,
-                        onSaveCustomDohUrl = onSaveCustomDohUrl,
-                        onTestDoh = onTestDoh
-                    )
-                }
-            }
-
-            if (activeSection == SettingsFocusSection.ALL || activeSection == SettingsFocusSection.NOTIFICATIONS) {
-                item {
-                    NotificationsSettingsSection(
-                        preferences = preferences,
-                        hasSystemPermission = hasSystemNotificationPermission,
-                        onRequestPermission = requestNotificationPermission,
-                        onToggleNotificationsEnabled = onToggleNotificationsEnabled,
-                        onToggleDownloadNotifications = onToggleDownloadNotifications,
-                        onToggleShieldAlerts = onToggleShieldAlerts,
-                        onToggleBlockSitePrompts = onToggleBlockSitePrompts,
-                        onSendTestNotification = onSendTestNotification
-                    )
-                }
-            }
-
-            if (activeSection == SettingsFocusSection.ALL || activeSection == SettingsFocusSection.GESTURES) {
-                item {
-                    GesturesSettingsSection(
-                        preferences = preferences,
-                        onToggleSwipeNav = onToggleSwipeNav,
-                        onToggleSwipeTabs = onToggleSwipeTabs,
-                        onTogglePullRefresh = onTogglePullRefresh,
-                        onToggleDoubleTapTop = onToggleDoubleTapTop,
-                        onOpenWidgetPreview = onOpenWidgetPreview
-                    )
-                }
-            }
-
-            if (activeSection == SettingsFocusSection.ALL || activeSection == SettingsFocusSection.VAULT) {
-                item {
-                    ProfilesAndVaultSection(
-                        preferences = preferences,
-                        vaultEntries = vaultEntries,
-                        onSelectProfile = onSelectProfile,
-                        onToggleBiometric = onToggleBiometric,
-                        onToggleAutofill = onToggleAutofill,
-                        onAddVaultEntry = onAddVaultEntry,
-                        onCopySecret = onCopySecret,
-                        onDeleteVaultEntry = onDeleteVaultEntry,
-                        isVaultUnlocked = isVaultUnlocked,
-                        onUnlockVault = onUnlockVault,
-                        onToggleBiometricIncognito = onToggleBiometricIncognito
                     )
                 }
             }
@@ -491,13 +363,69 @@ fun SettingsAnalyticsScreen(
                             }
                         }
 
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = ext.surfaceLow,
+                            border = BorderStroke(1.dp, ext.cardBorder),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text("Backup & Power Library Tools", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold))
+                                Text(
+                                    "Export or restore bookmarks, userscripts, watchlist & RSS feeds via portable JSON.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(
+                                        onClick = { exportBackupLauncher.launch("ritam_config_backup.json") },
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(Icons.Rounded.Backup, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Export JSON")
+                                    }
+                                    OutlinedButton(
+                                        onClick = { importBackupLauncher.launch(arrayOf("application/json", "*/*")) },
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(Icons.Rounded.Restore, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Restore")
+                                    }
+                                }
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(
+                                        onClick = onOpenWatchlist,
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(Icons.Rounded.Visibility, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Watchlist")
+                                    }
+                                    OutlinedButton(
+                                        onClick = onOpenFeeds,
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(Icons.Rounded.RssFeed, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("RSS Feeds")
+                                    }
+                                }
+                            }
+                        }
+
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             OutlinedButton(
                                 onClick = onOpenBookmarksManager,
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.weight(1f).height(48.dp)
                             ) {
-                                Text("Bookmarks Vault")
+                                Text("Bookmarks")
                             }
                             Button(
                                 onClick = onOpenClearData,
@@ -511,6 +439,12 @@ fun SettingsAnalyticsScreen(
                             }
                         }
                     }
+                }
+            }
+
+            if (activeSection == SettingsFocusSection.ALL || activeSection == SettingsFocusSection.ABOUT) {
+                item {
+                    AboutSection()
                 }
             }
         }

@@ -61,7 +61,7 @@ fun BottomNavDock(
     val dockContainerColor = if (isPrivate) IncognitoColors.Surface.copy(alpha = 0.96f) else ext.surfaceLow.copy(alpha = 0.96f)
     val dockBorderColor = if (isPrivate) IncognitoColors.Border else ext.cardBorder
     val activeIconTint = if (isPrivate) IncognitoColors.OnSurface else MaterialTheme.colorScheme.onSurface
-    val disabledIconTint = if (isPrivate) IncognitoColors.OnSurfaceMuted.copy(alpha = 0.35f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+    val disabledIconTint = if (isPrivate) IncognitoColors.OnSurfaceMuted.copy(alpha = 0.52f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.52f)
     val homeHighlightColor = if (isPrivate) IncognitoColors.Accent else MaterialTheme.colorScheme.primary
 
     Box(
@@ -69,14 +69,14 @@ fun BottomNavDock(
             .fillMaxWidth()
             .navigationBarsPadding()
             .padding(
-                horizontal = if (isFloating) 16.dp else 0.dp,
-                vertical = if (isFloating) 8.dp else 0.dp
+                horizontal = if (isFloating) 12.dp else 0.dp,
+                vertical = if (isFloating) 4.dp else 0.dp
             ),
         contentAlignment = Alignment.Center
     ) {
         Surface(
             modifier = Modifier
-                .widthIn(max = 560.dp)
+                .widthIn(max = 460.dp)
                 .fillMaxWidth()
                 .pointerInput(gestureSwipeNavEnabled, canGoBack, canGoForward) {
                     if (!gestureSwipeNavEnabled) return@pointerInput
@@ -93,18 +93,18 @@ fun BottomNavDock(
                         }
                     )
                 },
-            shape = if (isFloating) RoundedCornerShape((corner + 12.dp).coerceAtLeast(24.dp))
-            else RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
+            shape = if (isFloating) RoundedCornerShape((corner + 8.dp).coerceAtLeast(20.dp))
+            else RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp),
             color = dockContainerColor,
             tonalElevation = 4.dp,
-            shadowElevation = if (isFloating) 8.dp else 4.dp,
+            shadowElevation = if (isFloating) 6.dp else 3.dp,
             border = BorderStroke(1.dp, dockBorderColor)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(60.dp)
-                    .padding(horizontal = 8.dp),
+                    .height(48.dp)
+                    .padding(horizontal = 4.dp),
                 horizontalArrangement = Arrangement.SpaceAround,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -112,13 +112,14 @@ fun BottomNavDock(
                     onClick = onBack,
                     enabled = canGoBack,
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(40.dp)
                         .testTag("nav_back_button")
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = "Navigate back",
-                        tint = if (canGoBack) activeIconTint else disabledIconTint
+                        tint = if (canGoBack) activeIconTint else disabledIconTint,
+                        modifier = Modifier.size(19.dp)
                     )
                 }
 
@@ -126,20 +127,21 @@ fun BottomNavDock(
                     onClick = onForward,
                     enabled = canGoForward,
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(40.dp)
                         .testTag("nav_forward_button")
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                         contentDescription = "Navigate forward",
-                        tint = if (canGoForward) activeIconTint else disabledIconTint
+                        tint = if (canGoForward) activeIconTint else disabledIconTint,
+                        modifier = Modifier.size(19.dp)
                     )
                 }
 
                 Box(
                     modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(14.dp))
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(11.dp))
                         .background(
                             if (isHome) homeHighlightColor.copy(alpha = 0.16f)
                             else MaterialTheme.colorScheme.surface.copy(alpha = 0f)
@@ -150,7 +152,7 @@ fun BottomNavDock(
                 ) {
                     if (isPrivate) {
                         IncognitoSpectsEmblem(
-                            size = 24.dp,
+                            size = 19.dp,
                             tint = if (isHome) homeHighlightColor else activeIconTint,
                             hatFill = IncognitoColors.SurfaceElevated
                         )
@@ -158,33 +160,34 @@ fun BottomNavDock(
                         Icon(
                             imageVector = Icons.Rounded.Home,
                             contentDescription = "Browser Home",
-                            tint = if (isHome) homeHighlightColor else activeIconTint
+                            tint = if (isHome) homeHighlightColor else activeIconTint,
+                            modifier = Modifier.size(19.dp)
                         )
                     }
                 }
 
                 Box(
                     modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(10.dp))
                         .clickable(onClick = onOpenTabs)
                         .testTag("nav_tabs_button"),
                     contentAlignment = Alignment.Center
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(24.dp)
+                            .size(20.dp)
                             .border(
-                                width = 1.75.dp,
+                                width = 1.5.dp,
                                 color = activeIconTint,
-                                shape = RoundedCornerShape(6.dp)
+                                shape = RoundedCornerShape(5.dp)
                             ),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = if (tabCount > 99) "∞" else tabCount.toString(),
                             style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             ),
                             color = activeIconTint
@@ -195,13 +198,14 @@ fun BottomNavDock(
                 IconButton(
                     onClick = onOpenQuickControls,
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(40.dp)
                         .testTag("nav_quick_controls_button")
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Tune,
                         contentDescription = "Quick Controls & Tools",
-                        tint = activeIconTint
+                        tint = activeIconTint,
+                        modifier = Modifier.size(19.dp)
                     )
                 }
             }

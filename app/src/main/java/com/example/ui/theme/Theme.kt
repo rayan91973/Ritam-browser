@@ -60,7 +60,7 @@ fun RitamTheme(
 
     val colorScheme = if (isDark) {
         val baseSurface = if (preferences.oledPureBlack) OnyxOledSurface else OnyxSurface
-        val lowSurface = if (preferences.oledPureBlack) Color(0xFF0B0E0D) else OnyxSurfaceContainerLow
+        val lowSurface = if (preferences.oledPureBlack) Color(0xFF212A26) else OnyxSurfaceContainerLow
         darkColorScheme(
             primary = accentPair.primary,
             onPrimary = accentPair.onPrimary,
@@ -162,7 +162,7 @@ fun RitamTheme(
         RitamExtendedColors(
             isDark = true,
             surfaceLowest = OnyxSurfaceContainerLowest,
-            surfaceLow = if (preferences.oledPureBlack) Color(0xFF0A0D0C) else OnyxSurfaceContainerLow,
+            surfaceLow = if (preferences.oledPureBlack) Color(0xFF212A26) else OnyxSurfaceContainerLow,
             surfaceContainer = OnyxSurfaceContainer,
             surfaceHigh = OnyxSurfaceContainerHigh,
             surfaceHighest = OnyxSurfaceContainerHighest,
@@ -170,8 +170,8 @@ fun RitamTheme(
             onPrimaryFixed = accentPair.onPrimaryFixed,
             secondaryMuted = OnyxOnSurfaceVariant,
             badgeGreen = accentPair.primary,
-            cardBorder = OnyxOutlineVariant.copy(alpha = 0.6f),
-            privateBanner = Color(0xFF1F2B25),
+            cardBorder = OnyxOutlineVariant,
+            privateBanner = Color(0xFF2B3D34),
             onPrivateBanner = accentPair.primaryFixed
         )
     } else if (preferences.themePalette == ThemePalette.SOLARIZED_WARM) {

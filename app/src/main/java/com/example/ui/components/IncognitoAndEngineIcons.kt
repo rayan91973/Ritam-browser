@@ -48,14 +48,14 @@ import com.example.ui.theme.LocalRitamExtendedColors
 import com.example.ui.theme.NewsreaderFamily
 
 object IncognitoColors {
-    val Backdrop = Color(0xFF111318)
-    val Surface = Color(0xFF1B1E26)
-    val SurfaceElevated = Color(0xFF262A35)
-    val Border = Color(0xFF393F4F)
-    val OnSurface = Color(0xFFEDEFF5)
-    val OnSurfaceMuted = Color(0xFFA0A7BA)
+    val Backdrop = Color(0xFF1F2430)
+    val Surface = Color(0xFF282E3D)
+    val SurfaceElevated = Color(0xFF333B4E)
+    val Border = Color(0xFF56617C)
+    val OnSurface = Color(0xFFF4F6FC)
+    val OnSurfaceMuted = Color(0xFFCBD2E6)
     val Accent = Color(0xFFC5CEF2)
-    val BadgeBg = Color(0xFF2B3040)
+    val BadgeBg = Color(0xFF353E54)
 }
 
 @Composable
@@ -272,23 +272,23 @@ fun SearchEngineSelectorPillButton(
     Box(modifier = modifier) {
         Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(18.dp))
+                .clip(RoundedCornerShape(14.dp))
                 .background(
                     if (isPrivate) IncognitoColors.SurfaceElevated
-                    else ext.surfaceHigh.copy(alpha = 0.75f)
+                    else ext.surfaceHigh.copy(alpha = 0.85f)
                 )
                 .clickable { expanded = true }
-                .padding(horizontal = 6.dp, vertical = 5.dp)
+                .padding(horizontal = 5.dp, vertical = 3.dp)
                 .testTag("search_engine_selector_button"),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            SearchEngineLogo(engine = selectedEngine, size = 24.dp)
+            SearchEngineLogo(engine = selectedEngine, size = 18.dp)
             Icon(
                 imageVector = Icons.Rounded.KeyboardArrowDown,
                 contentDescription = "Change search engine (${selectedEngine.displayName})",
                 tint = if (isPrivate) IncognitoColors.OnSurfaceMuted else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(14.dp)
             )
         }
 
@@ -311,7 +311,7 @@ fun SearchEngineSelectorPillButton(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            SearchEngineLogo(engine = engine, size = 22.dp)
+                            SearchEngineLogo(engine = engine, size = 19.dp)
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = engine.displayName,

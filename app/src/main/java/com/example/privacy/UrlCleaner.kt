@@ -20,6 +20,82 @@ object UrlCleaner {
         val removedCount: Int
     )
 
+    data class UnwrapResult(
+        val unwrappedUrl: String,
+        val wrapperHost: String?,
+        val wasUnwrapped: Boolean
+    )
+
+    private val knownRedirectWrapperParams = listOf(
+        "url", "u", "q", "dest", "destination", "target", "redirect", "redirect_url", "to", "r"
+    )
+
+    private val knownRedirectWrapperHosts = hashSetOf(
+        "l.facebook.com", "lm.facebook.com", "m.facebook.com",
+        "l.instagram.com", "out.reddit.com", "click.redditmail.com",
+        "safelinks.protection.outlook.com", "vk.com", "youtube.com",
+        "www.youtube.com", "www.google.com", "google.com"
+    )
+
+    fun unwrapRedirectUrl(rawUrl: String): UnwrapResult {
+        var current = rawUrl.trim()
+        var wrapperHost: String? = null
+        var hops = 0
+        while (hops < 3) {
+            val uri = runCatching { Uri.parse(current) }.getOrNull() ?: break
+            val host = uri.host?.lowercase() ?: break
+            val path = uri.path?.lowercase() ?: ""
+            val isExplicitWrapper = host in knownRedirectWrapperHosts && (
+                path.startsWith("/url") ||
+                    path.startsWith("/l.php") ||
+                    path.startsWith("/away.php") ||
+                    path.startsWith("/redirect") ||
+                    host.startsWith("l.") ||
+                    host.startsWith("lm.") ||
+                    host.startsWith("out.") ||
+                    host.contains("safelinks")
+                )
+            var extracted: String? = null
+            if (isExplicitWrapper) {
+                for (param in knownRedirectWrapperParams) {
+                    val candidate = uri.getQueryParameter(param)?.trim()
+                    if (!candidate.isNullOrBlank() &&
+                        (candidate.startsWith("http://", true) || candidate.startsWith("https://", true))
+                    ) {
+                        val candidateHost = runCatching { Uri.parse(candidate).host?.lowercase() }.getOrNull()
+                        if (candidateHost != null && candidateHost != host) {
+                            extracted = candidate
+                            break
+                        }
+                    }
+                }
+            } else {
+                // Also catch explicit ?redirect=https://... or ?redirect_url=https://... wrappers
+                for (param in listOf("redirect", "redirect_url", "dest", "destination")) {
+                    val candidate = uri.getQueryParameter(param)?.trim()
+                    if (!candidate.isNullOrBlank() &&
+                        (candidate.startsWith("http://", true) || candidate.startsWith("https://", true))
+                    ) {
+                        val candidateHost = runCatching { Uri.parse(candidate).host?.lowercase() }.getOrNull()
+                        if (candidateHost != null && candidateHost != host) {
+                            extracted = candidate
+                            break
+                        }
+                    }
+                }
+            }
+            if (extracted == null) break
+            if (wrapperHost == null) wrapperHost = host.removePrefix("www.")
+            current = extracted
+            hops++
+        }
+        return UnwrapResult(
+            unwrappedUrl = current,
+            wrapperHost = wrapperHost,
+            wasUnwrapped = hops > 0
+        )
+    }
+
     fun cleanUrl(rawUrl: String): CleanResult {
         if (rawUrl.isBlank() || (!rawUrl.startsWith("http://", true) && !rawUrl.startsWith("https://", true))) {
             return CleanResult(rawUrl, 0)

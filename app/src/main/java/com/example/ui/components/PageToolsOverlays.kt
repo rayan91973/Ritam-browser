@@ -84,30 +84,30 @@ fun ReadAloudFloatingBar(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .padding(horizontal = 12.dp, vertical = 3.dp)
             .testTag("read_aloud_bar"),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
         color = bgColor,
         border = BorderStroke(1.dp, borderColor),
-        shadowElevation = 6.dp
+        shadowElevation = 4.dp
     ) {
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Surface(
                     shape = CircleShape,
                     color = accent.copy(alpha = 0.16f),
-                    modifier = Modifier.size(34.dp)
+                    modifier = Modifier.size(28.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Rounded.GraphicEq,
                             contentDescription = "Read Aloud active",
                             tint = accent,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
@@ -115,7 +115,7 @@ fun ReadAloudFloatingBar(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = state.title.ifBlank { "Read Aloud" },
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                         color = primaryText,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -130,57 +130,72 @@ fun ReadAloudFloatingBar(
 
                 Surface(
                     onClick = onCycleSpeed,
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(8.dp),
                     color = accent.copy(alpha = 0.16f),
                     modifier = Modifier.testTag("read_aloud_speed_button")
                 ) {
                     Text(
                         text = "${state.speechRate}x",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = accent,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
                     )
                 }
 
                 IconButton(
                     onClick = onPrev,
-                    modifier = Modifier.size(40.dp).testTag("read_aloud_prev_button")
+                    modifier = Modifier.size(34.dp).testTag("read_aloud_prev_button")
                 ) {
-                    Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous paragraph", tint = primaryText)
+                    Icon(
+                        Icons.Rounded.SkipPrevious,
+                        contentDescription = "Previous paragraph",
+                        tint = primaryText,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
 
                 Surface(
                     onClick = onTogglePlayPause,
                     shape = CircleShape,
                     color = accent,
-                    modifier = Modifier.size(40.dp).testTag("read_aloud_play_pause_button")
+                    modifier = Modifier.size(34.dp).testTag("read_aloud_play_pause_button")
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                             contentDescription = if (state.isPlaying) "Pause reading" else "Resume reading",
                             tint = if (isPrivate) IncognitoColors.Backdrop else MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
 
                 IconButton(
                     onClick = onNext,
-                    modifier = Modifier.size(40.dp).testTag("read_aloud_next_button")
+                    modifier = Modifier.size(34.dp).testTag("read_aloud_next_button")
                 ) {
-                    Icon(Icons.Rounded.SkipNext, contentDescription = "Next paragraph", tint = primaryText)
+                    Icon(
+                        Icons.Rounded.SkipNext,
+                        contentDescription = "Next paragraph",
+                        tint = primaryText,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
 
                 IconButton(
                     onClick = onStop,
-                    modifier = Modifier.size(40.dp).testTag("read_aloud_close_button")
+                    modifier = Modifier.size(34.dp).testTag("read_aloud_close_button")
                 ) {
-                    Icon(Icons.Rounded.Close, contentDescription = "Stop Read Aloud", tint = mutedText)
+                    Icon(
+                        Icons.Rounded.Close,
+                        contentDescription = "Stop Read Aloud",
+                        tint = mutedText,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
 
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
             LinearProgressIndicator(
                 progress = { state.progressFraction },
                 modifier = Modifier
@@ -366,64 +381,64 @@ fun HomeWidgetPreviewDialog(
 
                 // Live miniature widget preview
                 Surface(
-                    shape = RoundedCornerShape(22.dp),
-                    color = Color(0xFF191C1B),
-                    border = BorderStroke(1.dp, Color(0xFF39433D)),
+                    shape = RoundedCornerShape(18.dp),
+                    color = Color(0xFF232B27),
+                    border = BorderStroke(1.dp, Color(0xFF56655D)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 10.dp, vertical = 10.dp),
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Row(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(42.dp)
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(Color(0xFF262A28))
-                                .padding(horizontal = 12.dp),
+                                .height(36.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0xFF313D37))
+                                .padding(horizontal = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(
                                 Icons.Rounded.Search,
                                 contentDescription = null,
                                 tint = Color(0xFF91D5AE),
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                             Text(
                                 text = "Search with Ritam…",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFFE1E3E1),
+                                color = Color(0xFFF3F7F4),
                                 maxLines = 1
                             )
                         }
                         Box(
                             modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0xFF262A28)),
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0xFF313D37)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Rounded.Mic,
                                 contentDescription = null,
                                 tint = Color(0xFF91D5AE),
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                         Box(
                             modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0xFF262A28)),
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0xFF313D37)),
                             contentAlignment = Alignment.Center
                         ) {
                             IncognitoSpectsEmblem(
-                                size = 20.dp,
+                                size = 18.dp,
                                 tint = IncognitoColors.Accent,
                                 hatFill = IncognitoColors.Surface
                             )

@@ -1,19 +1,27 @@
 package com.example
 
+import android.Manifest
 import android.app.Activity
+import android.app.PendingIntent
 import android.app.PictureInPictureParams
+import android.app.RemoteAction
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
 import android.speech.RecognizerIntent
 import android.util.Rational
+import android.view.WindowManager
+import android.webkit.WebView
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -39,18 +47,21 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.privacy.UrlCleaner
-import com.example.services.BiometricAuthHelper
+import com.example.services.MediaSessionHelper
+import com.example.services.PwaShortcutHelper
 import com.example.ui.MainViewModel
 import com.example.ui.components.AddBookmarkDialog
-import com.example.ui.components.AddVaultEntryDialog
 import com.example.ui.components.BurnSessionOverlay
 import com.example.ui.components.ClearBrowsingDataDialog
+import com.example.ui.components.CommandPaletteDialog
 import com.example.ui.components.DevToolsSheet
 import com.example.ui.components.ExternalAppConfirmDialog
-import com.example.ui.components.HomeWidgetPreviewDialog
+import com.example.ui.components.HighlightNoteDialog
+import com.example.ui.components.HomographWarningDialog
 import com.example.ui.components.LinkContextMenuDialog
 import com.example.ui.components.MaliciousDomainDialog
 import com.example.ui.components.PageSourceDialog
@@ -59,8 +70,13 @@ import com.example.ui.components.QrCodeShareDialog
 import com.example.ui.components.QuickControlsSheet
 import com.example.ui.components.SitePermissionsDialog
 import com.example.ui.components.SslErrorDialog
+import com.example.ui.components.StructuredViewerDialog
 import com.example.ui.components.TabSwitcherOverlay
 import com.example.ui.components.TranslateSheetDialog
+import com.example.ui.components.UniversalViewerDialog
+import com.example.ui.components.UserscriptsDialog
+import com.example.ui.components.WatchlistDialog
+import com.example.ui.components.WebPermissionPromptDialog
 import com.example.ui.screens.BrowserScreen
 import com.example.ui.screens.LibraryScreen
 import com.example.ui.screens.LibraryTab
@@ -102,6 +118,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WebView.enableSlowWholeDocumentDraw()
         enableEdgeToEdge()
         handleIncomingIntent(intent)
 
@@ -114,16 +131,24 @@ class MainActivity : ComponentActivity() {
                     externalVoiceTrigger = widgetVoiceSearchTrigger,
                     isInPipMode = isInPipMode,
                     onEnterPipMode = { enterPipMode() },
+                    onSyncPipParams = { isPlaying, hasActiveMedia, isHome ->
+                        syncPipParams(isPlaying, hasActiveMedia, isHome)
+                    },
                     onLaunchVoiceSearch = { launchVoiceRecognition() }
                 )
             }
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        viewModel.webViewManager.resumeAllLiveWebViews()
+    }
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         val tab = viewModel.activeTab.value
-        if (tab.isPlayingMedia && !tab.isHome && !isFinishing) {
+        if ((tab.isPlayingMedia || tab.hasActiveMedia) && !tab.isHome && !isFinishing) {
             enterPipMode()
         }
     }
@@ -134,6 +159,7 @@ class MainActivity : ComponentActivity() {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         isInPipMode = isInPictureInPictureMode
+        viewModel.onEnteredPipMode(isInPictureInPictureMode)
     }
 
     override fun onStop() {
@@ -149,14 +175,56 @@ class MainActivity : ComponentActivity() {
         handleIncomingIntent(intent)
     }
 
+    private fun buildPipParams(
+        isPlaying: Boolean,
+        hasActiveMedia: Boolean,
+        isHome: Boolean
+    ): PictureInPictureParams {
+        val toggleIntent = Intent(MediaSessionHelper.ACTION_MEDIA_TOGGLE).setPackage(packageName)
+        val togglePending = PendingIntent.getBroadcast(
+            this,
+            212,
+            toggleIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val toggleAction = RemoteAction(
+            Icon.createWithResource(
+                this,
+                if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+            ),
+            if (isPlaying) "Pause" else "Play",
+            if (isPlaying) "Pause playback" else "Resume playback",
+            togglePending
+        )
+        val builder = PictureInPictureParams.Builder()
+            .setAspectRatio(Rational(16, 9))
+            .setActions(listOf(toggleAction))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setAutoEnterEnabled((isPlaying || hasActiveMedia) && !isHome)
+            builder.setSeamlessResizeEnabled(true)
+        }
+        return builder.build()
+    }
+
+    private fun syncPipParams(isPlaying: Boolean, hasActiveMedia: Boolean, isHome: Boolean) {
+        if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
+        runCatching {
+            setPictureInPictureParams(buildPipParams(isPlaying, hasActiveMedia, isHome))
+        }
+    }
+
     private fun enterPipMode() {
         if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
             viewModel.showMessage("Picture-in-Picture is not supported on this device")
             return
         }
-        val params = PictureInPictureParams.Builder()
-            .setAspectRatio(Rational(16, 9))
-            .build()
+        val tab = viewModel.activeTab.value
+        viewModel.onEnteringPipMode()
+        val params = buildPipParams(
+            isPlaying = tab.isPlayingMedia || tab.hasActiveMedia,
+            hasActiveMedia = tab.hasActiveMedia,
+            isHome = tab.isHome
+        )
         runCatching {
             enterPictureInPictureMode(params)
         }.onFailure {
@@ -165,10 +233,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIncomingIntent(intent: Intent?) {
+        val pwaUrl = intent?.getStringExtra(PwaShortcutHelper.EXTRA_PWA_URL)
+        val isStandalonePwa = intent?.getBooleanExtra(PwaShortcutHelper.EXTRA_PWA_STANDALONE, false) == true
+        if (!pwaUrl.isNullOrBlank()) {
+            viewModel.openUrlInNewTab(pwaUrl, isStandalonePwa = isStandalonePwa)
+            return
+        }
         if (intent?.action == Intent.ACTION_VIEW) {
             val url = intent.dataString
             if (!url.isNullOrBlank()) {
-                viewModel.openUrlInNewTab(url)
+                viewModel.openUrlInNewTab(url, isStandalonePwa = isStandalonePwa)
             }
             return
         }
@@ -202,6 +276,7 @@ private fun RitamAppRoot(
     externalVoiceTrigger: Int,
     isInPipMode: Boolean,
     onEnterPipMode: () -> Unit,
+    onSyncPipParams: (Boolean, Boolean, Boolean) -> Unit,
     onLaunchVoiceSearch: () -> Unit
 ) {
     val navController = rememberNavController()
@@ -217,10 +292,7 @@ private fun RitamAppRoot(
     val history by viewModel.history.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val readingList by viewModel.readingList.collectAsStateWithLifecycle()
-    val filterLists by viewModel.filterLists.collectAsStateWithLifecycle()
-    val customRules by viewModel.customFilterRules.collectAsStateWithLifecycle()
     val websiteSettings by viewModel.websiteSettings.collectAsStateWithLifecycle()
-    val vaultEntries by viewModel.vaultEntries.collectAsStateWithLifecycle()
     val recentSearches by viewModel.recentSearches.collectAsStateWithLifecycle()
     val adsBlockedTotal by viewModel.adsBlockedTotal.collectAsStateWithLifecycle()
     val trackersBlockedTotal by viewModel.trackersBlockedTotal.collectAsStateWithLifecycle()
@@ -235,13 +307,18 @@ private fun RitamAppRoot(
     val pageSourceState by viewModel.pageSourceState.collectAsStateWithLifecycle()
     val readAloudState by viewModel.readAloudState.collectAsStateWithLifecycle()
     val recentlyClosedCount by viewModel.recentlyClosedCount.collectAsStateWithLifecycle()
-    val isIncognitoLocked by viewModel.isIncognitoLocked.collectAsStateWithLifecycle()
-    val isVaultUnlocked by viewModel.isVaultUnlocked.collectAsStateWithLifecycle()
     val isToolbarHiddenOnScroll by viewModel.isToolbarHiddenOnScroll.collectAsStateWithLifecycle()
     val isBurningSession by viewModel.isBurningSession.collectAsStateWithLifecycle()
     val pdfViewerState by viewModel.pdfViewerState.collectAsStateWithLifecycle()
     val fullscreenVideoView by viewModel.fullscreenVideoView.collectAsStateWithLifecycle()
     val devToolsVisible by viewModel.devToolsVisible.collectAsStateWithLifecycle()
+    val devToolsInitialTab by viewModel.devToolsInitialTab.collectAsStateWithLifecycle()
+    val devToolsPageSource by viewModel.devToolsPageSource.collectAsStateWithLifecycle()
+    val cdpFormatState by viewModel.cdpFormatState.collectAsStateWithLifecycle()
+    val topSites by viewModel.topSites.collectAsStateWithLifecycle()
+    val quickControlUsage by viewModel.quickControlUsage.collectAsStateWithLifecycle()
+    val cacheStats by viewModel.cacheStats.collectAsStateWithLifecycle()
+    val universalViewerState by viewModel.universalViewerState.collectAsStateWithLifecycle()
     val consoleLogs by viewModel.consoleLogs.collectAsStateWithLifecycle()
     val networkLogs by viewModel.networkLogs.collectAsStateWithLifecycle()
     val cookiesDump by viewModel.cookiesDump.collectAsStateWithLifecycle()
@@ -252,16 +329,57 @@ private fun RitamAppRoot(
     val qrShareUrl by viewModel.qrShareUrl.collectAsStateWithLifecycle()
     val translateDialogOpen by viewModel.translateDialogOpen.collectAsStateWithLifecycle()
     val translateExcerpt by viewModel.translateExcerpt.collectAsStateWithLifecycle()
-    val dohTestResult by viewModel.dohTestResult.collectAsStateWithLifecycle()
     val snackbarMessage by viewModel.snackbarMessage.collectAsStateWithLifecycle()
+    val userscripts by viewModel.userscripts.collectAsStateWithLifecycle()
+    val watchlistItems by viewModel.watchlistItems.collectAsStateWithLifecycle()
+    val highlights by viewModel.highlights.collectAsStateWithLifecycle()
+    val rssFeeds by viewModel.rssFeeds.collectAsStateWithLifecycle()
+    val rssArticles by viewModel.rssArticles.collectAsStateWithLifecycle()
+    val activeDownloadSpeeds by viewModel.activeDownloadSpeeds.collectAsStateWithLifecycle()
+    val splitTab by viewModel.splitTab.collectAsStateWithLifecycle()
+    val commandPaletteOpen by viewModel.commandPaletteOpen.collectAsStateWithLifecycle()
+    val structuredViewerState by viewModel.structuredViewerState.collectAsStateWithLifecycle()
+    val pendingHighlightRequest by viewModel.pendingHighlightRequest.collectAsStateWithLifecycle()
+    val userscriptsDialogOpen by viewModel.userscriptsDialogOpen.collectAsStateWithLifecycle()
+    val watchlistDialogOpen by viewModel.watchlistDialogOpen.collectAsStateWithLifecycle()
+    val homographWarning by viewModel.homographWarning.collectAsStateWithLifecycle()
+    val webPermissionPrompt by viewModel.webPermissionPrompt.collectAsStateWithLifecycle()
 
     var showQuickControls by remember { mutableStateOf(false) }
     var showTabSwitcher by remember { mutableStateOf(false) }
     var addBookmarkUrlEdit by remember { mutableStateOf<Boolean?>(null) }
     var showClearDataDialog by remember { mutableStateOf(false) }
     var showSiteInfoDialog by remember { mutableStateOf(false) }
-    var showAddVaultDialog by remember { mutableStateOf(false) }
-    var showWidgetDialog by remember { mutableStateOf(false) }
+    var pendingRememberDomainPerm by remember { mutableStateOf(false) }
+
+    val openLocalFileLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> uri?.let { viewModel.openUriInUniversalViewer(it) } }
+
+    val webSensorPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        val anyGranted = grants.values.any { it }
+        viewModel.resolveWebPermissionPrompt(allow = anyGranted, rememberForDomain = pendingRememberDomainPerm)
+        if (!anyGranted) {
+            viewModel.showMessage("Android OS sensor permission denied")
+        }
+    }
+
+    val isCurrentDomainEphemeral = remember(activeTab.domain, websiteSettings, preferences.ephemeralContainerDefault) {
+        viewModel.shieldsEngine.isEphemeralContainerForDomain(activeTab.domain)
+    }
+
+    LaunchedEffect(preferences.screenSecurityPrivateEnabled, activeTab.isPrivate, isCurrentDomainEphemeral) {
+        val window = (context as? Activity)?.window ?: return@LaunchedEffect
+        val shouldSecure = preferences.screenSecurityPrivateEnabled &&
+            (activeTab.isPrivate || isCurrentDomainEphemeral)
+        if (shouldSecure) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+    }
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(snackbarMessage) {
@@ -283,10 +401,42 @@ private fun RitamAppRoot(
         }
     }
 
-    val shieldsEnabledForSite = remember(activeTab.domain, websiteSettings) {
-        val cleanDomain = activeTab.domain.lowercase().removePrefix("www.")
-        websiteSettings.firstOrNull { it.domain == cleanDomain }?.shieldsEnabled ?: true
+    LaunchedEffect(activeTab.isPlayingMedia, activeTab.hasActiveMedia, activeTab.isHome) {
+        onSyncPipParams(activeTab.isPlayingMedia, activeTab.hasActiveMedia, activeTab.isHome)
     }
+
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route ?: RitamRoutes.BROWSER
+
+    LaunchedEffect(isInPipMode, currentRoute) {
+        if (isInPipMode && currentRoute != RitamRoutes.BROWSER) {
+            navController.popBackStack(RitamRoutes.BROWSER, inclusive = false)
+        }
+    }
+
+    val isBrowserFocused = currentRoute == RitamRoutes.BROWSER &&
+        !showTabSwitcher &&
+        !showQuickControls &&
+        !commandPaletteOpen &&
+        !devToolsVisible &&
+        !translateDialogOpen &&
+        !userscriptsDialogOpen &&
+        !watchlistDialogOpen &&
+        addBookmarkUrlEdit == null &&
+        !showClearDataDialog &&
+        !showSiteInfoDialog &&
+        pageSourceState == null &&
+        pdfViewerState == null &&
+        universalViewerState == null &&
+        structuredViewerState == null &&
+        pendingHighlightRequest == null &&
+        homographWarning == null &&
+        webPermissionPrompt == null &&
+        sslWarning == null &&
+        maliciousWarning == null &&
+        qrShareUrl == null &&
+        longPressContext == null &&
+        externalAppRequest == null
 
     val backdropModifier = if (showTabSwitcher && preferences.surfaceBlur && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         Modifier.blur(10.dp)
@@ -295,94 +445,87 @@ private fun RitamAppRoot(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        NavHost(
-            navController = navController,
-            startDestination = RitamRoutes.BROWSER,
-            modifier = backdropModifier
-        ) {
-            composable(RitamRoutes.BROWSER) {
-                BrowserScreen(
-                    activeTab = activeTab,
-                    tabsCount = tabs.size,
-                    preferences = preferences,
-                    homeBookmarks = homeBookmarks,
-                    allBookmarks = allBookmarks,
-                    recentSearches = recentSearches,
-                    webViewManager = viewModel.webViewManager,
-                    shieldsEnabledForSite = shieldsEnabledForSite,
-                    sessionBlockedCount = sessionMetrics.adsBlocked + sessionMetrics.trackersBlocked,
-                    findInPageActive = findInPageActive,
-                    findInPageQuery = findInPageQuery,
-                    readerFontSizeSp = readerFontSizeSp,
-                    readAloudState = readAloudState,
-                    externalOpenOmniboxTrigger = externalOpenOmniboxTrigger,
-                    looksLikeUrl = { viewModel.looksLikeUrl(it) },
-                    onSelectSearchEngine = { viewModel.updateSearchEngine(it) },
-                    onCopyAddress = { url -> viewModel.copyToClipboard(context, url, "Address") },
-                    onNavigateInput = { viewModel.navigateToInput(it) },
-                    onOpenSanctuaryEssay = { viewModel.openSanctuaryEssay() },
-                    onBack = { viewModel.goBack() },
-                    onForward = { viewModel.goForward() },
-                    onHome = { viewModel.goHome() },
-                    onReloadOrStop = { viewModel.reloadOrStop() },
-                    onSwipeTab = { delta -> viewModel.switchToAdjacentTab(delta) },
-                    onDoubleTapAddress = { viewModel.scrollActivePageToTop() },
-                    onToggleReaderMode = { viewModel.toggleReaderMode() },
-                    onToggleDesktopMode = { viewModel.toggleDesktopMode() },
-                    onAdjustReaderFontSize = { viewModel.adjustReaderFontSize(it) },
-                    onToggleSiteShields = { viewModel.toggleShieldsForCurrentDomain() },
-                    onFindQueryChange = { viewModel.updateFindInPageQuery(it) },
-                    onFindNext = { viewModel.findNext(it) },
-                    onCloseFind = { viewModel.setFindInPageActive(false) },
-                    onToggleReadAloudPlayPause = { viewModel.toggleReadAloudPlayPause() },
-                    onPrevReadAloud = { viewModel.prevReadAloudParagraph() },
-                    onNextReadAloud = { viewModel.nextReadAloudParagraph() },
-                    onCycleReadAloudSpeed = { viewModel.cycleReadAloudSpeed() },
-                    onStopReadAloud = { viewModel.stopReadAloud() },
-                    onOpenTabSwitcher = { showTabSwitcher = true },
-                    onOpenQuickControls = { showQuickControls = true },
-                    onOpenShieldSettings = {
-                        navController.navigate(RitamRoutes.settings(SettingsFocusSection.SHIELDS))
-                    },
-                    onOpenProfileSettings = {
-                        navController.navigate(RitamRoutes.settings(SettingsFocusSection.ALL))
-                    },
-                    onOpenAddBookmark = { allowEdit -> addBookmarkUrlEdit = allowEdit },
-                    onOpenBookmarksManager = {
-                        navController.navigate(RitamRoutes.library(LibraryTab.BOOKMARKS))
-                    },
-                    onOpenSiteInfo = { showSiteInfoDialog = true },
-                    onVoiceSearch = onLaunchVoiceSearch,
-                    onScanQr = { navController.navigate(RitamRoutes.QR_SCANNER) },
-                    isToolbarHiddenOnScroll = isToolbarHiddenOnScroll,
-                    isIncognitoLocked = isIncognitoLocked && preferences.biometricIncognitoLock,
-                    isInPipMode = isInPipMode,
-                    fullscreenVideoView = fullscreenVideoView,
-                    onExitFullscreenVideo = { viewModel.exitFullscreenVideo() },
-                    onUnlockIncognito = {
-                        BiometricAuthHelper.authenticate(
-                            activityContext = context,
-                            title = "Unlock Incognito",
-                            subtitle = "Verify your identity to view private tabs",
-                            onSuccess = { viewModel.markIncognitoUnlocked() },
-                            onError = { msg -> viewModel.showMessage(msg) }
-                        )
-                    },
-                    onSwitchToRegularTab = {
-                        val regular = tabs.firstOrNull { !it.isPrivate }
-                        if (regular != null) {
-                            viewModel.switchTab(regular.id)
-                        } else {
-                            viewModel.createNewTab(isPrivate = false)
-                        }
-                    },
-                    onRevealToolbars = { viewModel.revealToolbars() },
-                    onToggleTabMedia = { viewModel.toggleTabMediaPlayback() },
-                    onEnterPip = onEnterPipMode,
-                    onShareQrCode = { url -> viewModel.showQrForCurrentOrUrl(url) },
-                    onAddToReadingList = { viewModel.addCurrentPageToReadingList() }
-                )
-            }
+        Box(modifier = Modifier.fillMaxSize().then(backdropModifier)) {
+            BrowserScreen(
+                activeTab = activeTab,
+                tabs = tabs,
+                tabsCount = tabs.size,
+                isBrowserFocused = isBrowserFocused,
+                preferences = preferences,
+                homeBookmarks = homeBookmarks,
+                topSites = topSites,
+                allBookmarks = allBookmarks,
+                recentSearches = recentSearches,
+                webViewManager = viewModel.webViewManager,
+                findInPageActive = findInPageActive,
+                findInPageQuery = findInPageQuery,
+                readerFontSizeSp = readerFontSizeSp,
+                readAloudState = readAloudState,
+                externalOpenOmniboxTrigger = externalOpenOmniboxTrigger,
+                looksLikeUrl = { viewModel.looksLikeUrl(it) },
+                onSelectSearchEngine = { viewModel.updateSearchEngine(it) },
+                onCopyAddress = { url -> viewModel.copyToClipboard(context, url, "Address") },
+                onNavigateInput = { viewModel.navigateToInput(it) },
+                onOpenSanctuaryEssay = { viewModel.openSanctuaryEssay() },
+                onBack = { viewModel.goBack() },
+                onForward = { viewModel.goForward() },
+                onHome = { viewModel.goHome() },
+                onReloadOrStop = { viewModel.reloadOrStop() },
+                onSwipeTab = { delta -> viewModel.switchToAdjacentTab(delta) },
+                onDoubleTapAddress = { viewModel.scrollActivePageToTop() },
+                onToggleReaderMode = { viewModel.toggleReaderMode() },
+                onToggleDesktopMode = { viewModel.toggleDesktopMode() },
+                onAdjustReaderFontSize = { viewModel.adjustReaderFontSize(it) },
+                onFindQueryChange = { viewModel.updateFindInPageQuery(it) },
+                onFindNext = { viewModel.findNext(it) },
+                onCloseFind = { viewModel.setFindInPageActive(false) },
+                onToggleReadAloudPlayPause = { viewModel.toggleReadAloudPlayPause() },
+                onPrevReadAloud = { viewModel.prevReadAloudParagraph() },
+                onNextReadAloud = { viewModel.nextReadAloudParagraph() },
+                onCycleReadAloudSpeed = { viewModel.cycleReadAloudSpeed() },
+                onStopReadAloud = { viewModel.stopReadAloud() },
+                onOpenTabSwitcher = { showTabSwitcher = true },
+                onOpenQuickControls = { showQuickControls = true },
+                onOpenSettings = {
+                    navController.navigate(RitamRoutes.settings(SettingsFocusSection.ALL))
+                },
+                onOpenAddBookmark = { allowEdit -> addBookmarkUrlEdit = allowEdit },
+                onOpenBookmarksManager = {
+                    navController.navigate(RitamRoutes.library(LibraryTab.BOOKMARKS))
+                },
+                onOpenSiteInfo = { showSiteInfoDialog = true },
+                onVoiceSearch = onLaunchVoiceSearch,
+                onScanQr = { navController.navigate(RitamRoutes.QR_SCANNER) },
+                isToolbarHiddenOnScroll = isToolbarHiddenOnScroll,
+                isInPipMode = isInPipMode,
+                fullscreenVideoView = fullscreenVideoView,
+                onExitFullscreenVideo = { viewModel.exitFullscreenVideo() },
+                onRevealToolbars = { viewModel.revealToolbars() },
+                onToggleTabMedia = { viewModel.toggleTabMediaPlayback() },
+                onEnterPip = onEnterPipMode,
+                onShareQrCode = { url -> viewModel.showQrForCurrentOrUrl(url) },
+                onAddToReadingList = { viewModel.addCurrentPageToReadingList() },
+                splitTab = splitTab,
+                onSwapSplitPanes = { viewModel.swapSplitPanes() },
+                onCloseSplitPane = { viewModel.closeSplitPane() },
+                onSelectSplitPaneFocus = { viewModel.swapSplitPanes() },
+                onChangeMediaSpeedBoost = { spd, boost -> viewModel.setTabMediaSpeedAndBoost(spd, boost) },
+                onSubscribeDiscoveredFeed = { feedUrl -> viewModel.subscribeRssFeed(feedUrl) },
+                onOpenCommandPalette = { viewModel.setCommandPaletteOpen(true) },
+                onToggleBionicReading = { viewModel.updateBionicReading(!preferences.bionicReadingEnabled) },
+                onAdjustReaderWidth = { viewModel.updateReaderColumnWidthDp(it) },
+                onAdjustReaderLineHeight = { viewModel.updateReaderLineHeightMultiplier(it) },
+                onSaveHighlight = { viewModel.openHighlightCapture() }
+            )
+
+            NavHost(
+                navController = navController,
+                startDestination = RitamRoutes.BROWSER,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                composable(RitamRoutes.BROWSER) {
+                    // Persistent BrowserScreen stays mounted underneath so background videos and tabs never pause
+                }
 
             composable(
                 route = RitamRoutes.LIBRARY,
@@ -428,7 +571,20 @@ private fun RitamAppRoot(
                     readingList = readingList,
                     onToggleReadLaterDone = { id, read -> viewModel.setReadingListRead(id, read) },
                     onDeleteReadLater = { viewModel.deleteReadingListItem(it) },
-                    onClearReadLaterDone = { viewModel.clearReadReadingList() }
+                    onClearReadLaterDone = { viewModel.clearReadReadingList() },
+                    activeDownloadSpeeds = activeDownloadSpeeds,
+                    onPauseDownload = { viewModel.pauseDownload(it) },
+                    onResumeDownload = { viewModel.resumeDownload(it) },
+                    rssFeeds = rssFeeds,
+                    rssArticles = rssArticles,
+                    onSubscribeFeed = { feedUrl -> viewModel.subscribeRssFeed(feedUrl) },
+                    onRefreshFeeds = { viewModel.refreshAllRssFeeds() },
+                    onToggleFeedArticleRead = { id, read -> viewModel.setRssArticleRead(id, read) },
+                    onDeleteFeed = { id -> viewModel.deleteRssFeed(id) },
+                    highlights = highlights,
+                    onDeleteHighlight = { id -> viewModel.deleteHighlight(id) },
+                    onExportHighlightsUri = { uri -> viewModel.exportHighlightsToUri(context, uri) },
+                    onOpenLocalFile = { uri -> viewModel.openUriInUniversalViewer(uri) }
                 )
             }
 
@@ -449,10 +605,6 @@ private fun RitamAppRoot(
                     totalBytesSaved = totalBytesSaved,
                     sessionMetrics = sessionMetrics,
                     openTabsCount = tabs.size,
-                    filterLists = filterLists,
-                    customRules = customRules,
-                    websiteSettings = websiteSettings,
-                    vaultEntries = vaultEntries,
                     onBack = { navController.popBackStack() },
                     onSelectPalette = { viewModel.updateThemePalette(it) },
                     onSelectAccent = { viewModel.updateAccentTone(it) },
@@ -468,62 +620,29 @@ private fun RitamAppRoot(
                     onSelectSearchEngine = { viewModel.updateSearchEngine(it) },
                     onSaveHomepageUrl = { viewModel.updateHomepageUrl(it) },
                     onToggleDefaultDesktop = { viewModel.updateDefaultDesktopMode(it) },
-                    onToggleAdBlock = { viewModel.updateAdBlocking(it) },
-                    onToggleCosmeticAdBlock = { viewModel.updateCosmeticAdBlocking(it) },
-                    onToggleTrackerBlock = { viewModel.updateTrackerBlocking(it) },
-                    onToggleMalicious = { viewModel.updateMaliciousProtection(it) },
-                    onToggleHttpsOnly = { viewModel.updateHttpsOnly(it) },
-                    onToggleJs = { viewModel.updateJavascriptEnabled(it) },
-                    onToggleThirdPartyCookies = { viewModel.updateBlockThirdPartyCookies(it) },
-                    onToggleFilterList = { id, enabled -> viewModel.setFilterListEnabled(id, enabled) },
-                    onAddCustomRule = { viewModel.addCustomFilterRule(it) },
-                    onToggleCustomRule = { id, enabled -> viewModel.setCustomRuleEnabled(id, enabled) },
-                    onDeleteCustomRule = { viewModel.deleteCustomRule(it) },
                     onToggleLocalTelemetry = { viewModel.updateLocalTelemetry(it) },
-                    onToggleNotificationsEnabled = { viewModel.updateNotificationsEnabled(it) },
-                    onToggleDownloadNotifications = { viewModel.updateDownloadNotificationsEnabled(it) },
-                    onToggleShieldAlerts = { viewModel.updateShieldAlertNotificationsEnabled(it) },
-                    onToggleBlockSitePrompts = { viewModel.updateBlockSiteNotificationPrompts(it) },
-                    onSendTestNotification = { viewModel.sendTestNotification() },
-                    onToggleSwipeNav = { viewModel.updateGestureSwipeNav(it) },
-                    onToggleSwipeTabs = { viewModel.updateGestureSwipeTabs(it) },
-                    onTogglePullRefresh = { viewModel.updateGesturePullRefresh(it) },
-                    onToggleDoubleTapTop = { viewModel.updateGestureDoubleTapTop(it) },
-                    onOpenWidgetPreview = { showWidgetDialog = true },
-                    onSelectProfile = { viewModel.updateActiveProfile(it) },
-                    onToggleBiometric = { viewModel.updateBiometricVaultLock(it) },
-                    onToggleAutofill = { viewModel.updateAutofillEnabled(it) },
-                    onAddVaultEntry = { showAddVaultDialog = true },
-                    onCopySecret = { secret -> viewModel.copyToClipboard(context, secret, "Vault Secret") },
-                    onDeleteVaultEntry = { viewModel.deleteVaultEntry(it) },
                     onOpenBookmarksManager = {
                         navController.navigate(RitamRoutes.library(LibraryTab.BOOKMARKS))
                     },
                     onOpenClearData = { showClearDataDialog = true },
-                    dohTestResult = dohTestResult,
-                    isVaultUnlocked = isVaultUnlocked,
-                    onUnlockVault = {
-                        BiometricAuthHelper.authenticate(
-                            activityContext = context,
-                            title = "Unlock Vault",
-                            subtitle = "Authenticate to view local passwords and keys",
-                            onSuccess = { viewModel.markVaultUnlocked() },
-                            onError = { msg -> viewModel.showMessage(msg) }
-                        )
-                    },
                     onToggleForceWebDark = { viewModel.updateForceWebDarkMode(it) },
                     onToggleBottomOmnibox = { viewModel.updateBottomOmnibox(it) },
                     onToggleAutoHideToolbars = { viewModel.updateAutoHideToolbarsOnScroll(it) },
-                    onToggleCookieBanners = { viewModel.updateBlockCookieBanners(it) },
-                    onToggleStripTracking = { viewModel.updateStripTrackingParams(it) },
-                    onToggleConfirmExternalApp = { viewModel.updateConfirmExternalAppLaunch(it) },
-                    onSelectDnsProvider = { viewModel.updateDnsProvider(it) },
-                    onSaveCustomDohUrl = { viewModel.updateCustomDohUrl(it) },
-                    onTestDoh = { viewModel.runDohLatencyTest() },
-                    onToggleBiometricIncognito = { viewModel.updateBiometricIncognitoLock(it) },
                     onToggleClearOnExit = { viewModel.updateClearOnExit(it) },
                     onChangeAutoCloseDays = { viewModel.updateAutoCloseTabsDays(it) },
-                    onSelectTranslateLanguage = { viewModel.updatePreferredTranslateLanguage(it) }
+                    onSelectTranslateLanguage = { viewModel.updatePreferredTranslateLanguage(it) },
+                    onExportConfigBackupUri = { uri -> viewModel.exportConfigBackupToUri(context, uri) },
+                    onImportConfigBackupUri = { uri -> viewModel.importConfigBackupFromUri(context, uri) },
+                    onOpenWatchlist = { viewModel.setWatchlistDialogOpen(true) },
+                    onOpenFeeds = { navController.navigate(RitamRoutes.library(LibraryTab.FEEDS)) },
+                    cacheStats = cacheStats,
+                    topSites = topSites,
+                    onClearAppCache = { viewModel.clearAppCacheOnly() },
+                    onClearSiteUsage = { viewModel.clearSiteUsageAnalytics() },
+                    onOpenSiteUrl = { url ->
+                        navController.popBackStack(RitamRoutes.BROWSER, inclusive = false)
+                        viewModel.navigateToInput(url)
+                    }
                 )
             }
 
@@ -535,6 +654,7 @@ private fun RitamAppRoot(
                     },
                     onBack = { navController.popBackStack() }
                 )
+            }
             }
         }
 
@@ -557,11 +677,12 @@ private fun RitamAppRoot(
         }
 
         if (showQuickControls) {
+            val quickControlUsageMap = remember(quickControlUsage) {
+                quickControlUsage.associateBy { it.controlId }
+            }
             QuickControlsSheet(
                 tab = activeTab,
                 preferences = preferences,
-                totalBlockedSession = sessionMetrics.adsBlocked + sessionMetrics.trackersBlocked,
-                shieldsEnabledForSite = shieldsEnabledForSite,
                 onDismiss = { showQuickControls = false },
                 onOpenBookmarks = { navController.navigate(RitamRoutes.library(LibraryTab.BOOKMARKS)) },
                 onOpenHistory = { navController.navigate(RitamRoutes.library(LibraryTab.HISTORY)) },
@@ -569,8 +690,6 @@ private fun RitamAppRoot(
                 onOpenSettings = { section ->
                     val target = when (section) {
                         "analytics" -> SettingsFocusSection.ANALYTICS
-                        "shields" -> SettingsFocusSection.SHIELDS
-                        "vault" -> SettingsFocusSection.VAULT
                         else -> SettingsFocusSection.ALL
                     }
                     navController.navigate(RitamRoutes.settings(target))
@@ -580,34 +699,34 @@ private fun RitamAppRoot(
                 onToggleFindInPage = { viewModel.setFindInPageActive(true) },
                 onSharePage = { viewModel.shareCurrentPage(context) },
                 onToggleDarkMode = { viewModel.toggleDarkModeQuick() },
-                onNewTab = { viewModel.createNewTab(false) },
-                onNewPrivateTab = { viewModel.createNewTab(true) },
-                onToggleHttpsOnly = { viewModel.updateHttpsOnly(!preferences.httpsOnlyEnabled) },
-                onToggleSiteShields = { viewModel.toggleShieldsForCurrentDomain() },
                 onBookmarkCurrent = { addBookmarkUrlEdit = false },
                 onScreenshot = { viewModel.captureAndShareScreenshot(rootView, context) },
                 onPrintPage = { viewModel.printCurrentPage(context) },
                 onViewSource = { viewModel.openPageSource() },
                 onSavePage = { viewModel.saveCurrentPageOffline() },
                 onReadAloud = { viewModel.startReadAloud() },
-                onOpenWidgets = { showWidgetDialog = true },
-                onOpenNotificationsSettings = {
-                    navController.navigate(RitamRoutes.settings(SettingsFocusSection.NOTIFICATIONS))
-                },
-                onOpenGesturesSettings = {
-                    navController.navigate(RitamRoutes.settings(SettingsFocusSection.GESTURES))
-                },
-                onClearData = { showClearDataDialog = true },
-                onSiteInfo = { showSiteInfoDialog = true },
                 onToggleForceWebDark = { viewModel.updateForceWebDarkMode(!preferences.forceWebDarkMode) },
                 onOpenTranslate = { viewModel.openTranslateDialog() },
                 onAddToReadingList = { viewModel.addCurrentPageToReadingList() },
                 onShowQrCode = { viewModel.showQrForCurrentOrUrl() },
                 onBurnSession = { viewModel.burnSession() },
                 onEnterPip = onEnterPipMode,
-                onOpenDevTools = { viewModel.openDevTools() },
+                onOpenDevTools = { viewModel.openDevTools(initialTab = 1) },
                 onToggleBottomOmnibox = { viewModel.updateBottomOmnibox(!preferences.bottomOmnibox) },
-                onChangePageZoom = { zoom -> viewModel.setTabZoom(zoom) }
+                onChangePageZoom = { zoom -> viewModel.setTabZoom(zoom) },
+                splitActive = splitTab != null,
+                onOpenCommandPalette = { viewModel.setCommandPaletteOpen(true) },
+                onToggleSplitScreen = { viewModel.toggleSplitScreen() },
+                onFullPageScreenshot = { viewModel.captureFullPageScreenshot(rootView, context) },
+                onHighlightSelection = { viewModel.openHighlightCapture() },
+                onOpenWatchlist = { viewModel.setWatchlistDialogOpen(true) },
+                onOpenUserscripts = { viewModel.setUserscriptsDialogOpen(true) },
+                onOpenStructuredViewer = { viewModel.openStructuredViewerForCurrentPage() },
+                onInstallWebApp = { viewModel.installCurrentSiteAsPwa(context) },
+                onOpenFeeds = { navController.navigate(RitamRoutes.library(LibraryTab.FEEDS)) },
+                usageMap = quickControlUsageMap,
+                onRecordActionUse = { id -> viewModel.recordQuickControlUse(id) },
+                onOpenLocalFile = { openLocalFileLauncher.launch(arrayOf("*/*")) }
             )
         }
 
@@ -662,36 +781,25 @@ private fun RitamAppRoot(
             SitePermissionsDialog(
                 domain = cleanDomain,
                 sslSecure = activeTab.sslSecure,
-                shieldsEnabled = currentSiteSetting?.shieldsEnabled ?: true,
                 jsEnabled = currentSiteSetting?.javascriptEnabled ?: preferences.javascriptEnabled,
-                httpsOnly = currentSiteSetting?.httpsOnly ?: preferences.httpsOnlyEnabled,
                 zoomPercent = currentSiteSetting?.zoomPercent ?: activeTab.zoomPercent,
                 forceDarkOverride = currentSiteSetting?.forceDarkOverride ?: -1,
-                onSave = { shields, js, https, zoomPercent, forceDarkOverride ->
+                onSave = { js, zoomPercent, forceDarkOverride ->
                     if (cleanDomain.isNotBlank()) {
                         viewModel.upsertWebsiteSetting(
                             domain = cleanDomain,
-                            shieldsEnabled = shields,
+                            shieldsEnabled = true,
                             jsEnabled = js,
-                            httpsOnly = https,
+                            httpsOnly = true,
                             zoomPercent = zoomPercent,
-                            forceDarkOverride = forceDarkOverride
+                            forceDarkOverride = forceDarkOverride,
+                            isEphemeralContainer = false
                         )
                         viewModel.reloadOrStop()
                     }
                     showSiteInfoDialog = false
                 },
                 onDismiss = { showSiteInfoDialog = false }
-            )
-        }
-
-        if (showAddVaultDialog) {
-            AddVaultEntryDialog(
-                onSave = { label, domain, user, secret, cat ->
-                    viewModel.addVaultEntry(label, domain, user, secret, cat)
-                    showAddVaultDialog = false
-                },
-                onDismiss = { showAddVaultDialog = false }
             )
         }
 
@@ -703,18 +811,20 @@ private fun RitamAppRoot(
             )
         }
 
-        if (showWidgetDialog) {
-            HomeWidgetPreviewDialog(
-                onPinWidget = { viewModel.pinHomeWidget(context) },
-                onDismiss = { showWidgetDialog = false }
-            )
-        }
-
         pdfViewerState?.let { pdfState ->
             PdfViewerDialog(
                 state = pdfState,
                 onOpenExternal = { file -> viewModel.openPdfExternally(context, file) },
                 onDismiss = { viewModel.dismissPdfViewer() }
+            )
+        }
+
+        universalViewerState?.let { uvState ->
+            UniversalViewerDialog(
+                state = uvState,
+                onCopyText = { txt -> viewModel.copyToClipboard(context, txt, "Document text") },
+                onOpenExternal = { file -> viewModel.openFileExternally(context, file, null, uvState.mimeType) },
+                onDismiss = { viewModel.dismissUniversalViewer() }
             )
         }
 
@@ -729,7 +839,16 @@ private fun RitamAppRoot(
                 onRunJs = { viewModel.runDevJs(it) },
                 onRefreshStorage = { viewModel.refreshDevStorage() },
                 onClearLogs = { viewModel.clearDevLogs() },
-                onDismiss = { viewModel.dismissDevTools() }
+                onDismiss = { viewModel.dismissDevTools() },
+                initialTab = devToolsInitialTab,
+                pageUrl = activeTab.url,
+                pageSourceHtml = devToolsPageSource,
+                structuredState = cdpFormatState,
+                cacheStats = cacheStats,
+                onRefreshSource = { viewModel.refreshDevSource() },
+                onRefreshFormat = { viewModel.refreshDevFormat() },
+                onClearAppCache = { viewModel.clearAppCacheOnly() },
+                onCopyText = { text, label -> viewModel.copyToClipboard(context, text, label) }
             )
         }
 
@@ -779,6 +898,122 @@ private fun RitamAppRoot(
                 onTranslateFullPage = { lang -> viewModel.translateCurrentPage(lang) },
                 onRestoreOriginal = { viewModel.restoreOriginalPage() },
                 onDismiss = { viewModel.dismissTranslateDialog() }
+            )
+        }
+
+        if (commandPaletteOpen) {
+            CommandPaletteDialog(
+                tabs = tabs,
+                bookmarks = allBookmarks,
+                readingList = readingList,
+                history = history,
+                activeTab = activeTab,
+                splitActive = splitTab != null,
+                onSelectTab = { tabId ->
+                    navController.popBackStack(RitamRoutes.BROWSER, inclusive = false)
+                    viewModel.switchTab(tabId)
+                },
+                onOpenUrl = { input ->
+                    navController.popBackStack(RitamRoutes.BROWSER, inclusive = false)
+                    viewModel.navigateToInput(input)
+                },
+                onActionCommand = { actionId ->
+                    when (actionId) {
+                        "split_view" -> viewModel.toggleSplitScreen()
+                        "full_screenshot" -> viewModel.captureFullPageScreenshot(rootView, context)
+                        "highlight" -> viewModel.openHighlightCapture()
+                        "pretty_viewer" -> viewModel.openStructuredViewerForCurrentPage()
+                        "watchlist" -> viewModel.setWatchlistDialogOpen(true)
+                        "userscripts" -> viewModel.setUserscriptsDialogOpen(true)
+                        "pwa_install" -> viewModel.installCurrentSiteAsPwa(context)
+                        "rss_feeds" -> navController.navigate(RitamRoutes.library(LibraryTab.FEEDS))
+                        "toggle_dark" -> viewModel.toggleDarkModeQuick()
+                        "toggle_desktop" -> viewModel.toggleDesktopMode()
+                        "burn_session" -> viewModel.burnSession()
+                        "open_file" -> openLocalFileLauncher.launch(arrayOf("*/*"))
+                    }
+                },
+                onDismiss = { viewModel.setCommandPaletteOpen(false) }
+            )
+        }
+
+        structuredViewerState?.let { viewerState ->
+            StructuredViewerDialog(
+                state = viewerState,
+                onCopy = { formatted -> viewModel.copyToClipboard(context, formatted, "Formatted Output") },
+                onDismiss = { viewModel.dismissStructuredViewer() }
+            )
+        }
+
+        if (userscriptsDialogOpen) {
+            UserscriptsDialog(
+                scripts = userscripts,
+                userscriptsEnabled = preferences.userscriptsEnabled,
+                onToggleGlobal = { viewModel.updateUserscriptsEnabled(it) },
+                onAddScript = { name, pattern, code, isCss -> viewModel.addUserscript(name, pattern, code, isCss) },
+                onToggleScript = { id, enabled -> viewModel.setUserscriptEnabled(id, enabled) },
+                onDeleteScript = { id -> viewModel.deleteUserscript(id) },
+                onDismiss = { viewModel.setUserscriptsDialogOpen(false) }
+            )
+        }
+
+        if (watchlistDialogOpen) {
+            WatchlistDialog(
+                items = watchlistItems,
+                canAddCurrent = !activeTab.isHome && activeTab.url.isNotBlank(),
+                onAddCurrent = { viewModel.addCurrentPageToWatchlist() },
+                onCheckNow = { viewModel.checkWatchlistNow() },
+                onOpenItem = { item ->
+                    viewModel.markWatchlistSeen(item.id)
+                    viewModel.setWatchlistDialogOpen(false)
+                    navController.popBackStack(RitamRoutes.BROWSER, inclusive = false)
+                    viewModel.navigateToInput(item.url)
+                },
+                onDeleteItem = { id -> viewModel.deleteWatchlistItem(id) },
+                onDismiss = { viewModel.setWatchlistDialogOpen(false) }
+            )
+        }
+
+        pendingHighlightRequest?.let { req ->
+            HighlightNoteDialog(
+                request = req,
+                onSave = { quote, note, colorHex -> viewModel.saveHighlight(quote, note, colorHex) },
+                onDismiss = { viewModel.dismissHighlightCapture() }
+            )
+        }
+
+        homographWarning?.let { warning ->
+            HomographWarningDialog(
+                warning = warning,
+                onGoBack = { viewModel.dismissHomographWarning() },
+                onProceedAnyway = { viewModel.bypassHomographAndLoad() }
+            )
+        }
+
+        webPermissionPrompt?.let { promptReq ->
+            val requestOsAndResolve = { rememberDomain: Boolean ->
+                val neededOs = promptReq.resourceLabels.flatMap { label ->
+                    when (label) {
+                        "CAMERA" -> listOf(Manifest.permission.CAMERA)
+                        "MICROPHONE" -> listOf(Manifest.permission.RECORD_AUDIO)
+                        "LOCATION" -> listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                        else -> emptyList()
+                    }
+                }.distinct().filter {
+                    ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+                }
+                if (neededOs.isEmpty()) {
+                    viewModel.resolveWebPermissionPrompt(allow = true, rememberForDomain = rememberDomain)
+                } else {
+                    pendingRememberDomainPerm = rememberDomain
+                    webSensorPermissionLauncher.launch(neededOs.toTypedArray())
+                }
+            }
+            WebPermissionPromptDialog(
+                request = promptReq,
+                onAllowOnceThisTab = { requestOsAndResolve(false) },
+                onAlwaysAllow = { requestOsAndResolve(true) },
+                onDeny = { viewModel.resolveWebPermissionPrompt(allow = false, rememberForDomain = false) }
             )
         }
 

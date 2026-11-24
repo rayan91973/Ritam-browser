@@ -1,6 +1,5 @@
 package com.example.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -20,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -47,8 +47,6 @@ import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Queue
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Security
-import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Warning
 import com.example.privacy.UrlCleaner
 import androidx.compose.material3.HorizontalDivider
@@ -57,7 +55,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -92,8 +89,6 @@ import com.example.ui.theme.LocalRitamExtendedColors
 @Composable
 fun ActiveOmniboxHeader(
     tab: TabState,
-    shieldsEnabledForSite: Boolean,
-    httpsOnlyEnabled: Boolean,
     gestureSwipeTabsEnabled: Boolean = true,
     gesturePullRefreshEnabled: Boolean = true,
     gestureDoubleTapTopEnabled: Boolean = true,
@@ -101,8 +96,6 @@ fun ActiveOmniboxHeader(
     onDoubleTapAddress: () -> Unit = {},
     onSwipeTab: (Int) -> Unit = {},
     onTapSiteInfo: () -> Unit,
-    onToggleSiteShields: () -> Unit,
-    onOpenShieldSettings: () -> Unit,
     onToggleReaderMode: () -> Unit,
     onToggleDesktopMode: () -> Unit = {},
     onReloadOrStop: () -> Unit,
@@ -110,7 +103,6 @@ fun ActiveOmniboxHeader(
     modifier: Modifier = Modifier
 ) {
     val ext = LocalRitamExtendedColors.current
-    var showShieldFlyout by remember { mutableStateOf(false) }
 
     val pillSurfaceColor = if (tab.isPrivate) IncognitoColors.Surface else ext.surfaceLow
     val pillBorderColor = if (tab.isPrivate) IncognitoColors.Border else ext.cardBorder
@@ -125,10 +117,12 @@ fun ActiveOmniboxHeader(
                 else Modifier
             )
             .then(if (!isBottomDocked) Modifier.statusBarsPadding() else Modifier)
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Surface(
             modifier = Modifier
+                .widthIn(max = 500.dp)
                 .fillMaxWidth()
                 .pointerInput(gestureSwipeTabsEnabled, gesturePullRefreshEnabled) {
                     if (!gestureSwipeTabsEnabled && !gesturePullRefreshEnabled) return@pointerInput
@@ -152,30 +146,30 @@ fun ActiveOmniboxHeader(
                         }
                     )
                 },
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(22.dp),
             color = pillSurfaceColor,
             border = BorderStroke(1.dp, pillBorderColor),
             tonalElevation = 2.dp,
-            shadowElevation = 3.dp
+            shadowElevation = 2.dp
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp)
-                    .padding(horizontal = 6.dp),
+                    .height(42.dp)
+                    .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (tab.isPrivate) {
                     Box(
                         modifier = Modifier
-                            .padding(start = 6.dp, end = 2.dp)
-                            .size(28.dp)
+                            .padding(start = 4.dp, end = 2.dp)
+                            .size(22.dp)
                             .clip(CircleShape)
                             .background(IncognitoColors.BadgeBg),
                         contentAlignment = Alignment.Center
                     ) {
                         IncognitoSpectsEmblem(
-                            size = 18.dp,
+                            size = 14.dp,
                             tint = IncognitoColors.Accent,
                             hatFill = IncognitoColors.Surface
                         )
@@ -185,7 +179,7 @@ fun ActiveOmniboxHeader(
                 IconButton(
                     onClick = onTapSiteInfo,
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(34.dp)
                         .testTag("omnibox_ssl_button")
                 ) {
                     Icon(
@@ -194,7 +188,7 @@ fun ActiveOmniboxHeader(
                         tint = if (tab.sslSecure) {
                             if (tab.isPrivate) IncognitoColors.Accent else MaterialTheme.colorScheme.primary
                         } else MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(15.dp)
                     )
                 }
 
@@ -202,7 +196,7 @@ fun ActiveOmniboxHeader(
                 Row(
                     modifier = Modifier
                         .weight(1f)
-                        .height(44.dp)
+                        .height(36.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .combinedClickable(
                             onClick = onTapAddress,
@@ -223,7 +217,7 @@ fun ActiveOmniboxHeader(
                     }
                     Text(
                         text = displayDomain,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
                         color = primaryTextColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -231,7 +225,7 @@ fun ActiveOmniboxHeader(
                     if (pathSuffix.isNotEmpty() && pathSuffix != "/") {
                         Text(
                             text = pathSuffix,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.labelSmall,
                             color = mutedTextColor,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -240,48 +234,18 @@ fun ActiveOmniboxHeader(
                     }
                 }
 
-                // Ritam Shield badge
                 val pillControlBg = if (tab.isPrivate) IncognitoColors.SurfaceElevated else ext.surfaceHigh
-                val pillControlBorder = if (tab.isPrivate) IncognitoColors.Border else ext.cardBorder
                 val pillAccent = if (tab.isPrivate) IncognitoColors.Accent else MaterialTheme.colorScheme.primary
 
-                Surface(
-                    onClick = { showShieldFlyout = !showShieldFlyout },
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (shieldsEnabledForSite) pillControlBg else MaterialTheme.colorScheme.errorContainer,
-                    border = BorderStroke(1.dp, pillControlBorder),
-                    modifier = Modifier
-                        .height(34.dp)
-                        .testTag("omnibox_shield_badge")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Shield,
-                            contentDescription = "Ritam Shields status",
-                            tint = if (shieldsEnabledForSite) pillAccent else MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Text(
-                            text = tab.totalBlocked.toString(),
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = primaryTextColor
-                        )
-                    }
-                }
-
                 if (tab.isDesktopMode) {
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(3.dp))
                     Surface(
                         onClick = onToggleDesktopMode,
                         shape = CircleShape,
                         color = pillAccent.copy(alpha = 0.18f),
                         border = BorderStroke(1.dp, pillAccent.copy(alpha = 0.45f)),
                         modifier = Modifier
-                            .size(34.dp)
+                            .size(28.dp)
                             .testTag("omnibox_desktop_badge")
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -289,13 +253,13 @@ fun ActiveOmniboxHeader(
                                 imageVector = Icons.Rounded.DesktopWindows,
                                 contentDescription = "Desktop view active (tap to switch)",
                                 tint = pillAccent,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(14.dp)
                             )
                         }
                     }
                 }
 
-                Spacer(Modifier.width(4.dp))
+                Spacer(Modifier.width(3.dp))
 
                 // Reader Mode pill
                 Surface(
@@ -303,7 +267,7 @@ fun ActiveOmniboxHeader(
                     shape = CircleShape,
                     color = if (tab.isReaderMode) pillAccent else pillControlBg,
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(28.dp)
                         .testTag("omnibox_reader_button")
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -313,7 +277,7 @@ fun ActiveOmniboxHeader(
                             tint = if (tab.isReaderMode) {
                                 if (tab.isPrivate) IncognitoColors.Backdrop else MaterialTheme.colorScheme.onPrimary
                             } else primaryTextColor,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(15.dp)
                         )
                     }
                 }
@@ -321,14 +285,14 @@ fun ActiveOmniboxHeader(
                 IconButton(
                     onClick = onReloadOrStop,
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(34.dp)
                         .testTag("omnibox_refresh_button")
                 ) {
                     Icon(
                         imageVector = if (tab.isLoading) Icons.Rounded.Close else Icons.Rounded.Refresh,
                         contentDescription = if (tab.isLoading) "Stop loading" else "Reload page",
                         tint = mutedTextColor,
-                        modifier = Modifier.size(19.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
@@ -347,103 +311,6 @@ fun ActiveOmniboxHeader(
             )
         }
 
-        AnimatedVisibility(visible = showShieldFlyout) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 6.dp),
-                shape = RoundedCornerShape(18.dp),
-                color = ext.surfaceLow,
-                border = BorderStroke(1.dp, ext.cardBorder),
-                shadowElevation = 6.dp
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                Icons.Rounded.Security,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Column {
-                                Text(
-                                    text = if (shieldsEnabledForSite) "Ad-Blocker & Shield Active" else "Ad-Blocker Paused for Site",
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                                )
-                                Text(
-                                    text = tab.domain.ifBlank { "Current Session" },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        Switch(
-                            checked = shieldsEnabledForSite,
-                            onCheckedChange = { onToggleSiteShields() },
-                            modifier = Modifier.testTag("flyout_shield_toggle")
-                        )
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        ShieldStatMini("Ads Blocked", tab.adsBlocked.toString())
-                        ShieldStatMini("Trackers", tab.trackersBlocked.toString())
-                        ShieldStatMini("HTTPS-Only", if (httpsOnlyEnabled) "Enforced" else "Off")
-                    }
-                    if (tab.blockedDomains.isNotEmpty()) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = "Blocked hosts: ${tab.blockedDomains.take(4).joinToString(", ")}" +
-                                if (tab.blockedDomains.size > 4) " +${tab.blockedDomains.size - 4} more" else "",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(onClick = { showShieldFlyout = false }) {
-                            Text("Close")
-                        }
-                        TextButton(onClick = {
-                            showShieldFlyout = false
-                            onOpenShieldSettings()
-                        }) {
-                            Text("Ad-Blocker Rules")
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ShieldStatMini(label: String, value: String) {
-    Column {
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
 
@@ -506,24 +373,26 @@ fun OmniboxSearchOverlay(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (isPrivate) {
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(10.dp),
                     color = IncognitoColors.BadgeBg,
                     border = BorderStroke(1.dp, IncognitoColors.Border),
                     modifier = Modifier
+                        .widthIn(max = 500.dp)
                         .fillMaxWidth()
-                        .padding(bottom = 8.dp)
+                        .padding(bottom = 6.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         IncognitoSpectsEmblem(
-                            size = 18.dp,
+                            size = 15.dp,
                             tint = IncognitoColors.Accent,
                             hatFill = IncognitoColors.Surface
                         )
@@ -537,23 +406,26 @@ fun OmniboxSearchOverlay(
             }
 
             Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(28.dp),
+                modifier = Modifier
+                    .widthIn(max = 500.dp)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(22.dp),
                 color = overlaySurface,
-                border = BorderStroke(1.5.dp, overlayAccent.copy(alpha = 0.6f))
+                border = BorderStroke(1.5.dp, overlayAccent.copy(alpha = 0.65f))
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp)
-                        .padding(horizontal = 6.dp),
+                        .height(44.dp)
+                        .padding(horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(44.dp)) {
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
                         Icon(
                             Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = "Cancel address input",
-                            tint = overlayText
+                            tint = overlayText,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
 
@@ -561,14 +433,14 @@ fun OmniboxSearchOverlay(
                         selectedEngine = searchEngine,
                         onSelectEngine = onSelectSearchEngine,
                         isPrivate = isPrivate,
-                        modifier = Modifier.padding(end = 6.dp)
+                        modifier = Modifier.padding(end = 4.dp)
                     )
 
                     BasicTextField(
                         value = queryState,
                         onValueChange = { queryState = it },
                         singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
                             color = overlayText
                         ),
                         cursorBrush = SolidColor(overlayAccent),
@@ -584,7 +456,7 @@ fun OmniboxSearchOverlay(
                             if (query.isEmpty()) {
                                 Text(
                                     text = "Search ${searchEngine.displayName} or enter URL",
-                                    style = MaterialTheme.typography.bodyLarge,
+                                    style = MaterialTheme.typography.bodyMedium,
                                     color = overlayMuted,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -600,50 +472,66 @@ fun OmniboxSearchOverlay(
                     if (query.isNotEmpty()) {
                         IconButton(
                             onClick = { queryState = TextFieldValue("") },
-                            modifier = Modifier.size(44.dp)
+                            modifier = Modifier.size(36.dp)
                         ) {
-                            Icon(Icons.Rounded.Close, contentDescription = "Clear text", tint = overlayMuted)
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = "Clear text",
+                                tint = overlayMuted,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     } else {
-                        IconButton(onClick = onVoiceSearch, modifier = Modifier.size(44.dp)) {
-                            Icon(Icons.Rounded.Mic, contentDescription = "Voice search", tint = overlayMuted)
+                        IconButton(onClick = onVoiceSearch, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                Icons.Rounded.Mic,
+                                contentDescription = "Voice search",
+                                tint = overlayMuted,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
-                        IconButton(onClick = onScanQr, modifier = Modifier.size(44.dp)) {
-                            Icon(Icons.Rounded.QrCodeScanner, contentDescription = "Scan QR code", tint = overlayMuted)
+                        IconButton(onClick = onScanQr, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                Icons.Rounded.QrCodeScanner,
+                                contentDescription = "Scan QR code",
+                                tint = overlayMuted,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     }
                 }
             }
 
             if (initialQuery.isNotBlank()) {
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 Surface(
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(14.dp),
                     color = overlaySurface,
                     border = BorderStroke(1.dp, overlayBorder),
                     modifier = Modifier
+                        .widthIn(max = 500.dp)
                         .fillMaxWidth()
                         .testTag("omnibox_current_address_card")
                 ) {
                     Column(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Surface(
                                 shape = CircleShape,
                                 color = overlayElevated,
-                                modifier = Modifier.size(34.dp)
+                                modifier = Modifier.size(28.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Rounded.Public,
                                         contentDescription = null,
                                         tint = overlayAccent,
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(15.dp)
                                     )
                                 }
                             }
@@ -651,7 +539,7 @@ fun OmniboxSearchOverlay(
                                 if (currentPageTitle.isNotBlank()) {
                                     Text(
                                         text = currentPageTitle,
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
                                         color = overlayText,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
@@ -659,7 +547,7 @@ fun OmniboxSearchOverlay(
                                 }
                                 Text(
                                     text = initialQuery,
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MaterialTheme.typography.labelSmall,
                                     color = overlayMuted,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -673,7 +561,7 @@ fun OmniboxSearchOverlay(
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Surface(
@@ -681,12 +569,12 @@ fun OmniboxSearchOverlay(
                                     copiedAddress = true
                                     onCopyAddress(cleanResult.cleanedUrl)
                                 },
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(10.dp),
                                 color = if (copiedAddress) overlayAccent.copy(alpha = 0.2f) else overlayElevated,
                                 border = BorderStroke(1.dp, if (copiedAddress) overlayAccent else overlayBorder),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(48.dp)
+                                    .height(38.dp)
                                     .testTag("omnibox_copy_address_button")
                             ) {
                                 Row(
@@ -698,16 +586,16 @@ fun OmniboxSearchOverlay(
                                         imageVector = if (copiedAddress) Icons.Rounded.Check else Icons.Rounded.ContentCopy,
                                         contentDescription = "Copy clean address",
                                         tint = if (copiedAddress) overlayAccent else overlayText,
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(15.dp)
                                     )
-                                    Spacer(Modifier.width(6.dp))
+                                    Spacer(Modifier.width(5.dp))
                                     Text(
                                         text = when {
                                             copiedAddress -> "Copied"
                                             cleanResult.removedCount > 0 -> "Clean Copy (-${cleanResult.removedCount})"
-                                            else -> "Copy address"
+                                            else -> "Copy"
                                         },
-                                        style = MaterialTheme.typography.labelLarge,
+                                        style = MaterialTheme.typography.labelMedium,
                                         color = if (copiedAddress) overlayAccent else overlayText,
                                         maxLines = 1
                                     )
@@ -722,12 +610,12 @@ fun OmniboxSearchOverlay(
                                     )
                                     focusRequester.requestFocus()
                                 },
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(10.dp),
                                 color = overlayElevated,
                                 border = BorderStroke(1.dp, overlayBorder),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(48.dp)
+                                    .height(38.dp)
                                     .testTag("omnibox_edit_address_button")
                             ) {
                                 Row(
@@ -739,12 +627,12 @@ fun OmniboxSearchOverlay(
                                         imageVector = Icons.Rounded.Edit,
                                         contentDescription = "Edit address",
                                         tint = overlayAccent,
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(15.dp)
                                     )
-                                    Spacer(Modifier.width(6.dp))
+                                    Spacer(Modifier.width(5.dp))
                                     Text(
-                                        text = "Edit address",
-                                        style = MaterialTheme.typography.labelLarge,
+                                        text = "Edit",
+                                        style = MaterialTheme.typography.labelMedium,
                                         color = overlayText
                                     )
                                 }
@@ -752,34 +640,34 @@ fun OmniboxSearchOverlay(
 
                             Surface(
                                 onClick = { onShareQrCode(cleanResult.cleanedUrl) },
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(10.dp),
                                 color = overlayElevated,
                                 border = BorderStroke(1.dp, overlayBorder),
-                                modifier = Modifier.size(48.dp)
+                                modifier = Modifier.size(38.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Rounded.QrCode2,
                                         contentDescription = "Share QR Code",
                                         tint = overlayAccent,
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(17.dp)
                                     )
                                 }
                             }
 
                             Surface(
                                 onClick = { onAddToReadingList(); onDismiss() },
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(10.dp),
                                 color = overlayElevated,
                                 border = BorderStroke(1.dp, overlayBorder),
-                                modifier = Modifier.size(48.dp)
+                                modifier = Modifier.size(38.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Rounded.Queue,
                                         contentDescription = "Add to Reading List",
                                         tint = overlayText,
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(17.dp)
                                     )
                                 }
                             }
@@ -788,7 +676,7 @@ fun OmniboxSearchOverlay(
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -950,31 +838,31 @@ fun FindInPageBar(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .padding(horizontal = 10.dp, vertical = 3.dp)
             .testTag("find_in_page_bar"),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         color = barBg,
         border = BorderStroke(1.dp, barBorder)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp)
-                .padding(horizontal = 12.dp),
+                .height(40.dp)
+                .padding(horizontal = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 Icons.Rounded.Search,
                 contentDescription = null,
                 tint = barMuted,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(16.dp)
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
             BasicTextField(
                 value = query,
                 onValueChange = onQueryChange,
                 singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                textStyle = MaterialTheme.typography.bodySmall.copy(
                     color = barText
                 ),
                 cursorBrush = SolidColor(barAccent),
@@ -982,7 +870,7 @@ fun FindInPageBar(
                     if (query.isEmpty()) {
                         Text(
                             "Find in page…",
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.bodySmall,
                             color = barMuted
                         )
                     }
@@ -995,27 +883,34 @@ fun FindInPageBar(
             if (query.isNotEmpty()) {
                 Text(
                     text = if (totalMatches > 0) "$currentMatch/$totalMatches" else "0/0",
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelSmall,
                     color = if (totalMatches > 0) barAccent else MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(horizontal = 6.dp)
+                    modifier = Modifier.padding(horizontal = 4.dp)
                 )
             }
-            IconButton(onClick = onPrev, enabled = totalMatches > 0, modifier = Modifier.size(40.dp)) {
+            IconButton(onClick = onPrev, enabled = totalMatches > 0, modifier = Modifier.size(34.dp)) {
                 Icon(
                     Icons.Rounded.KeyboardArrowUp,
                     contentDescription = "Previous match",
-                    tint = if (totalMatches > 0) barText else barMuted.copy(alpha = 0.4f)
+                    tint = if (totalMatches > 0) barText else barMuted.copy(alpha = 0.55f),
+                    modifier = Modifier.size(18.dp)
                 )
             }
-            IconButton(onClick = onNext, enabled = totalMatches > 0, modifier = Modifier.size(40.dp)) {
+            IconButton(onClick = onNext, enabled = totalMatches > 0, modifier = Modifier.size(34.dp)) {
                 Icon(
                     Icons.Rounded.KeyboardArrowDown,
                     contentDescription = "Next match",
-                    tint = if (totalMatches > 0) barText else barMuted.copy(alpha = 0.4f)
+                    tint = if (totalMatches > 0) barText else barMuted.copy(alpha = 0.55f),
+                    modifier = Modifier.size(18.dp)
                 )
             }
-            IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Rounded.Close, contentDescription = "Close find bar", tint = barMuted)
+            IconButton(onClick = onClose, modifier = Modifier.size(34.dp)) {
+                Icon(
+                    Icons.Rounded.Close,
+                    contentDescription = "Close find bar",
+                    tint = barMuted,
+                    modifier = Modifier.size(17.dp)
+                )
             }
         }
     }

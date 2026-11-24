@@ -1,5 +1,7 @@
 package com.example.browser
 
+import android.webkit.GeolocationPermissions
+import android.webkit.PermissionRequest
 import java.util.UUID
 
 data class ReaderArticle(
@@ -48,11 +50,63 @@ data class TabState(
     val isTranslated: Boolean = false,
     val originalUrlBeforeTranslate: String = "",
     val hasActiveMedia: Boolean = false,
-    val isPlayingMedia: Boolean = false
+    val isPlayingMedia: Boolean = false,
+    // 19-Feature Power Additions
+    val mediaSpeed: Float = 1.0f,
+    val audioBoost: Float = 1.0f,
+    val discoveredFeedUrl: String? = null,
+    val isStandalonePwa: Boolean = false,
+    // 9-Feature Privacy & Security Additions
+    val privacyReport: TabPrivacyReport = TabPrivacyReport(),
+    val activeSensorGrants: Set<String> = emptySet()
 ) {
     val isHome: Boolean get() = url.isBlank()
     val totalBlocked: Int get() = adsBlocked + trackersBlocked
 }
+
+data class TabPrivacyReport(
+    val blockedHostCounts: Map<String, Int> = emptyMap(),
+    val apiProbesBlocked: Map<String, Int> = emptyMap(),
+    val unwrappedRedirects: Int = 0,
+    val strippedParamsCount: Int = 0,
+    val httpsUpgrades: Int = 0
+) {
+    val totalHostBlocks: Int get() = blockedHostCounts.values.sum()
+    val totalApiBlocks: Int get() = apiProbesBlocked.values.sum()
+
+    fun computeGrade(
+        sslSecure: Boolean,
+        shieldsEnabled: Boolean,
+        strictLockdownsActive: Int = 4
+    ): String {
+        var score = 100
+        if (!sslSecure) score -= 40
+        if (!shieldsEnabled) score -= 25
+        if (shieldsEnabled) {
+            score += strictLockdownsActive.coerceIn(0, 6)
+        } else if (blockedHostCounts.size > 3 || apiProbesBlocked.isNotEmpty()) {
+            score -= 15
+        }
+        return when {
+            score >= 96 && sslSecure && shieldsEnabled -> "A+"
+            score >= 85 -> "A"
+            score >= 70 -> "B"
+            score >= 50 -> "C"
+            else -> "D"
+        }
+    }
+}
+
+data class WebPermissionPromptRequest(
+    val tabId: String,
+    val origin: String,
+    val domain: String,
+    val permissionKeys: List<String>,
+    val resourceLabels: List<String>,
+    val rawPermissionRequest: PermissionRequest? = null,
+    val geoOrigin: String? = null,
+    val geoCallback: GeolocationPermissions.Callback? = null
+)
 
 data class SslWarningState(
     val tabId: String,
@@ -84,6 +138,14 @@ data class WebContextMenuRequest(
     val linkUrl: String? = null,
     val imageUrl: String? = null,
     val titleText: String = ""
+)
+
+data class HighlightSelectionRequest(
+    val tabId: String,
+    val url: String,
+    val domain: String,
+    val title: String,
+    val quoteText: String
 )
 
 data class ConsoleLogEntry(
@@ -162,3 +224,138 @@ object SanctuaryReaderSamples {
         })();
     """
 }
+
+data class HomeSiteShortcut(
+    val key: String,
+    val title: String,
+    val url: String,
+    val domain: String,
+    val iconKey: String,
+    val visitCount: Long = 0L,
+    val isPinned: Boolean = false,
+    val isAnalyticsTop: Boolean = false
+)
+
+object SiteShortcutPlanner {
+    fun mergePinnedAndTopSites(
+        pinnedBookmarks: List<com.example.data.local.BookmarkEntity>,
+        topSites: List<com.example.data.local.SiteUsageEntity>,
+        maxSlots: Int = 7
+    ): List<HomeSiteShortcut> {
+        val topByDomain = topSites.associateBy { normalizeDomain(it.domain) }
+        val result = mutableListOf<HomeSiteShortcut>()
+        val seenDomains = mutableSetOf<String>()
+
+        // 1. Place frequently visited analytics sites at the front
+        topSites
+            .filter { it.visitCount > 0L && normalizeDomain(it.domain).isNotBlank() }
+            .sortedWith(compareByDescending<com.example.data.local.SiteUsageEntity> { it.visitCount }.thenByDescending { it.lastVisitedAt })
+            .forEach { usage ->
+                if (result.size >= maxSlots) return@forEach
+                val norm = normalizeDomain(usage.domain)
+                if (seenDomains.add(norm)) {
+                    val matchingPinned = pinnedBookmarks.firstOrNull { extractNormalizedHost(it.url) == norm }
+                    result.add(
+                        HomeSiteShortcut(
+                            key = "top_$norm",
+                            title = matchingPinned?.title ?: cleanSiteTitle(usage.title, norm),
+                            url = matchingPinned?.url ?: usage.url,
+                            domain = norm,
+                            iconKey = resolveBadgeKey(matchingPinned?.iconKey ?: "", matchingPinned?.title ?: usage.title, norm),
+                            visitCount = usage.visitCount,
+                            isPinned = matchingPinned != null,
+                            isAnalyticsTop = true
+                        )
+                    )
+                }
+            }
+
+        // 2. Fill remaining slots with pinned bookmarks not yet shown
+        pinnedBookmarks.forEach { bm ->
+            if (result.size >= maxSlots) return@forEach
+            val norm = extractNormalizedHost(bm.url)
+            if (norm.isBlank() || seenDomains.add(norm)) {
+                val usage = topByDomain[norm]
+                result.add(
+                    HomeSiteShortcut(
+                        key = "bm_${bm.id}",
+                        title = bm.title,
+                        url = bm.url,
+                        domain = norm,
+                        iconKey = resolveBadgeKey(bm.iconKey, bm.title, norm),
+                        visitCount = usage?.visitCount ?: 0L,
+                        isPinned = true,
+                        isAnalyticsTop = (usage?.visitCount ?: 0L) > 0L
+                    )
+                )
+            }
+        }
+
+        return result.take(maxSlots)
+    }
+
+    fun resolveBadgeKey(rawIconKey: String, title: String, domain: String): String {
+        val trimmed = rawIconKey.trim()
+        val mappedLegacy = when (trimmed.lowercase()) {
+            "smart_display" -> "YT"
+            "code" -> "GH"
+            "travel_explore" -> "DD"
+            "forum" -> "RD"
+            "public", "" -> ""
+            else -> if (trimmed.length <= 2 && trimmed.all { it.isLetterOrDigit() }) trimmed.uppercase() else ""
+        }
+        if (mappedLegacy.isNotBlank()) return mappedLegacy
+
+        val cleanDomain = normalizeDomain(domain)
+        return when {
+            cleanDomain.contains("youtube") -> "YT"
+            cleanDomain.contains("github") -> "GH"
+            cleanDomain.contains("duckduckgo") -> "DD"
+            cleanDomain.contains("reddit") -> "RD"
+            cleanDomain.contains("wikipedia") -> "W"
+            cleanDomain.contains("news.ycombinator") -> "Y"
+            cleanDomain.contains("google") -> "G"
+            else -> title.trim().firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString()
+                ?: cleanDomain.firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString()
+                ?: "W"
+        }
+    }
+
+    fun normalizeDomain(domain: String): String =
+        domain.trim().lowercase().removePrefix("www.").removePrefix("m.")
+
+    private fun extractNormalizedHost(url: String): String {
+        val host = url
+            .substringAfter("://", url)
+            .substringBefore("/")
+            .substringBefore("?")
+            .substringBefore(":")
+        return normalizeDomain(host)
+    }
+
+    private fun cleanSiteTitle(rawTitle: String, domain: String): String {
+        val t = rawTitle.trim()
+        if (t.isNotBlank() && !t.startsWith("http")) {
+            return t.substringBefore(" - ").substringBefore(" | ").take(18).trim()
+        }
+        return domain.substringBefore(".").replaceFirstChar { it.uppercaseChar() }
+    }
+}
+
+object QuickControlUsageSorter {
+    fun <T> sortByUsage(
+        items: List<T>,
+        idOf: (T) -> String,
+        usageMap: Map<String, com.example.data.local.QuickControlUsageEntity>
+    ): List<T> {
+        if (usageMap.isEmpty()) return items
+        return items.withIndex()
+            .sortedWith(
+                compareByDescending<IndexedValue<T>> { usageMap[idOf(it.value)]?.usageCount ?: 0L }
+                    .thenByDescending { usageMap[idOf(it.value)]?.lastUsedAt ?: 0L }
+                    .thenBy { it.index }
+            )
+            .map { it.value }
+    }
+}
+

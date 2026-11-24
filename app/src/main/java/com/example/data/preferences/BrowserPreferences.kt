@@ -118,7 +118,22 @@ data class BrowserPreferences(
     val customDohUrl: String = "",
     val confirmExternalAppLaunch: Boolean = true,
     val autoCloseTabsDays: Int = 0, // 0 = Never, 7, 14, 30
-    val preferredTranslateLanguage: String = "es"
+    val preferredTranslateLanguage: String = "es",
+    // 19-Feature Power Expansion
+    val fingerprintRandomizerEnabled: Boolean = true,
+    val ephemeralContainerDefault: Boolean = false,
+    val clipboardAutoClearSeconds: Int = 30, // 0 = Off, 30, 60
+    val bionicReadingEnabled: Boolean = false,
+    val readerColumnWidthDp: Int = 640,
+    val readerLineHeightMultiplier: Float = 1.62f,
+    val userscriptsEnabled: Boolean = true,
+    // 9-Feature Privacy & Security Shield
+    val screenSecurityPrivateEnabled: Boolean = false,
+    val homographGuardEnabled: Boolean = true,
+    val unwrapRedirectLinksEnabled: Boolean = true,
+    val strictReferrerPolicyEnabled: Boolean = true,
+    val blockWebRtcLeaksEnabled: Boolean = true,
+    val lockdownCovertApisEnabled: Boolean = true
 )
 
 class PreferencesRepository(private val context: Context) {
@@ -170,6 +185,19 @@ class PreferencesRepository(private val context: Context) {
         val CONFIRM_EXTERNAL_APP_LAUNCH = booleanPreferencesKey("confirm_external_app_launch")
         val AUTO_CLOSE_TABS_DAYS = intPreferencesKey("auto_close_tabs_days")
         val PREFERRED_TRANSLATE_LANGUAGE = stringPreferencesKey("preferred_translate_language")
+        val FINGERPRINT_RANDOMIZER = booleanPreferencesKey("fingerprint_randomizer")
+        val EPHEMERAL_CONTAINER_DEFAULT = booleanPreferencesKey("ephemeral_container_default")
+        val CLIPBOARD_AUTO_CLEAR_SECONDS = intPreferencesKey("clipboard_auto_clear_seconds")
+        val BIONIC_READING = booleanPreferencesKey("bionic_reading")
+        val READER_COLUMN_WIDTH_DP = intPreferencesKey("reader_column_width_dp")
+        val READER_LINE_HEIGHT_X100 = intPreferencesKey("reader_line_height_x100")
+        val USERSCRIPTS_ENABLED = booleanPreferencesKey("userscripts_enabled")
+        val SCREEN_SECURITY_PRIVATE = booleanPreferencesKey("screen_security_private")
+        val HOMOGRAPH_GUARD = booleanPreferencesKey("homograph_guard")
+        val UNWRAP_REDIRECT_LINKS = booleanPreferencesKey("unwrap_redirect_links")
+        val STRICT_REFERRER_POLICY = booleanPreferencesKey("strict_referrer_policy")
+        val BLOCK_WEBRTC_LEAKS = booleanPreferencesKey("block_webrtc_leaks")
+        val LOCKDOWN_COVERT_APIS = booleanPreferencesKey("lockdown_covert_apis")
     }
 
     val preferences: Flow<BrowserPreferences> = context.dataStore.data.map { prefs ->
@@ -193,42 +221,53 @@ class PreferencesRepository(private val context: Context) {
             searchEngine = prefs[Keys.SEARCH_ENGINE]?.let { runCatching { SearchEngine.valueOf(it) }.getOrNull() }
                 ?: SearchEngine.DUCKDUCKGO,
             homepageUrl = prefs[Keys.HOMEPAGE_URL] ?: "",
-            adBlockingEnabled = prefs[Keys.AD_BLOCKING] ?: true,
-            trackerBlockingEnabled = prefs[Keys.TRACKER_BLOCKING] ?: true,
-            maliciousProtectionEnabled = prefs[Keys.MALICIOUS_PROTECTION] ?: true,
-            httpsOnlyEnabled = prefs[Keys.HTTPS_ONLY] ?: true,
-            javascriptEnabled = prefs[Keys.JAVASCRIPT_ENABLED] ?: true,
-            blockThirdPartyCookies = prefs[Keys.BLOCK_THIRD_PARTY_COOKIES] ?: true,
+            adBlockingEnabled = true,
+            trackerBlockingEnabled = true,
+            maliciousProtectionEnabled = true,
+            httpsOnlyEnabled = true,
+            javascriptEnabled = true,
+            blockThirdPartyCookies = true,
             defaultDesktopMode = prefs[Keys.DEFAULT_DESKTOP_MODE] ?: false,
             restoreTabsOnStartup = prefs[Keys.RESTORE_TABS] ?: true,
             askWhereToSaveDownloads = prefs[Keys.ASK_WHERE_TO_SAVE] ?: false,
             localTelemetryEnabled = prefs[Keys.LOCAL_TELEMETRY] ?: true,
-            biometricVaultLock = prefs[Keys.BIOMETRIC_VAULT_LOCK] ?: true,
-            autofillEnabled = prefs[Keys.AUTOFILL_ENABLED] ?: true,
-            activeProfile = prefs[Keys.ACTIVE_PROFILE]?.let { runCatching { ProfilePersona.valueOf(it) }.getOrNull() }
-                ?: ProfilePersona.PERSONAL,
-            notificationsEnabled = prefs[Keys.NOTIFICATIONS_ENABLED] ?: true,
-            downloadNotificationsEnabled = prefs[Keys.DOWNLOAD_NOTIFICATIONS] ?: true,
-            shieldAlertNotificationsEnabled = prefs[Keys.SHIELD_ALERT_NOTIFICATIONS] ?: false,
-            blockSiteNotificationPrompts = prefs[Keys.BLOCK_SITE_NOTIFICATION_PROMPTS] ?: true,
-            gestureSwipeNavEnabled = prefs[Keys.GESTURE_SWIPE_NAV] ?: true,
-            gestureSwipeTabsEnabled = prefs[Keys.GESTURE_SWIPE_TABS] ?: true,
-            gesturePullRefreshEnabled = prefs[Keys.GESTURE_PULL_REFRESH] ?: true,
-            gestureDoubleTapTopEnabled = prefs[Keys.GESTURE_DOUBLE_TAP_TOP] ?: true,
-            cosmeticAdBlockingEnabled = prefs[Keys.COSMETIC_AD_BLOCKING] ?: true,
+            biometricVaultLock = true,
+            autofillEnabled = false,
+            activeProfile = ProfilePersona.PERSONAL,
+            notificationsEnabled = true,
+            downloadNotificationsEnabled = true,
+            shieldAlertNotificationsEnabled = false,
+            blockSiteNotificationPrompts = true,
+            gestureSwipeNavEnabled = true,
+            gestureSwipeTabsEnabled = true,
+            gesturePullRefreshEnabled = true,
+            gestureDoubleTapTopEnabled = true,
+            cosmeticAdBlockingEnabled = true,
             forceWebDarkMode = prefs[Keys.FORCE_WEB_DARK_MODE] ?: false,
-            biometricIncognitoLock = prefs[Keys.BIOMETRIC_INCOGNITO_LOCK] ?: false,
+            biometricIncognitoLock = false,
             bottomOmnibox = prefs[Keys.BOTTOM_OMNIBOX] ?: false,
-            blockCookieBanners = prefs[Keys.BLOCK_COOKIE_BANNERS] ?: true,
-            stripTrackingParams = prefs[Keys.STRIP_TRACKING_PARAMS] ?: true,
+            blockCookieBanners = true,
+            stripTrackingParams = true,
             autoHideToolbarsOnScroll = prefs[Keys.AUTO_HIDE_TOOLBARS] ?: true,
             clearOnExit = prefs[Keys.CLEAR_ON_EXIT] ?: false,
-            dnsProvider = prefs[Keys.DNS_PROVIDER]?.let { runCatching { DnsProvider.valueOf(it) }.getOrNull() }
-                ?: DnsProvider.SYSTEM,
-            customDohUrl = prefs[Keys.CUSTOM_DOH_URL] ?: "",
-            confirmExternalAppLaunch = prefs[Keys.CONFIRM_EXTERNAL_APP_LAUNCH] ?: true,
+            dnsProvider = DnsProvider.SYSTEM,
+            customDohUrl = "",
+            confirmExternalAppLaunch = true,
             autoCloseTabsDays = prefs[Keys.AUTO_CLOSE_TABS_DAYS] ?: 0,
-            preferredTranslateLanguage = prefs[Keys.PREFERRED_TRANSLATE_LANGUAGE] ?: "es"
+            preferredTranslateLanguage = prefs[Keys.PREFERRED_TRANSLATE_LANGUAGE] ?: "es",
+            fingerprintRandomizerEnabled = true,
+            ephemeralContainerDefault = false,
+            clipboardAutoClearSeconds = 30,
+            bionicReadingEnabled = prefs[Keys.BIONIC_READING] ?: false,
+            readerColumnWidthDp = prefs[Keys.READER_COLUMN_WIDTH_DP] ?: 640,
+            readerLineHeightMultiplier = (prefs[Keys.READER_LINE_HEIGHT_X100] ?: 162) / 100f,
+            userscriptsEnabled = prefs[Keys.USERSCRIPTS_ENABLED] ?: true,
+            screenSecurityPrivateEnabled = prefs[Keys.SCREEN_SECURITY_PRIVATE] ?: false,
+            homographGuardEnabled = true,
+            unwrapRedirectLinksEnabled = true,
+            strictReferrerPolicyEnabled = true,
+            blockWebRtcLeaksEnabled = true,
+            lockdownCovertApisEnabled = true
         )
     }
 
@@ -277,6 +316,21 @@ class PreferencesRepository(private val context: Context) {
     suspend fun updateConfirmExternalAppLaunch(enabled: Boolean) = edit { it[Keys.CONFIRM_EXTERNAL_APP_LAUNCH] = enabled }
     suspend fun updateAutoCloseTabsDays(days: Int) = edit { it[Keys.AUTO_CLOSE_TABS_DAYS] = days }
     suspend fun updatePreferredTranslateLanguage(langCode: String) = edit { it[Keys.PREFERRED_TRANSLATE_LANGUAGE] = langCode }
+    suspend fun updateFingerprintRandomizer(enabled: Boolean) = edit { it[Keys.FINGERPRINT_RANDOMIZER] = enabled }
+    suspend fun updateEphemeralContainerDefault(enabled: Boolean) = edit { it[Keys.EPHEMERAL_CONTAINER_DEFAULT] = enabled }
+    suspend fun updateClipboardAutoClearSeconds(seconds: Int) = edit { it[Keys.CLIPBOARD_AUTO_CLEAR_SECONDS] = seconds }
+    suspend fun updateBionicReading(enabled: Boolean) = edit { it[Keys.BIONIC_READING] = enabled }
+    suspend fun updateReaderColumnWidthDp(dp: Int) = edit { it[Keys.READER_COLUMN_WIDTH_DP] = dp.coerceIn(460, 780) }
+    suspend fun updateReaderLineHeightMultiplier(mult: Float) = edit {
+        it[Keys.READER_LINE_HEIGHT_X100] = (mult * 100).toInt().coerceIn(135, 205)
+    }
+    suspend fun updateUserscriptsEnabled(enabled: Boolean) = edit { it[Keys.USERSCRIPTS_ENABLED] = enabled }
+    suspend fun updateScreenSecurityPrivate(enabled: Boolean) = edit { it[Keys.SCREEN_SECURITY_PRIVATE] = enabled }
+    suspend fun updateHomographGuard(enabled: Boolean) = edit { it[Keys.HOMOGRAPH_GUARD] = enabled }
+    suspend fun updateUnwrapRedirectLinks(enabled: Boolean) = edit { it[Keys.UNWRAP_REDIRECT_LINKS] = enabled }
+    suspend fun updateStrictReferrerPolicy(enabled: Boolean) = edit { it[Keys.STRICT_REFERRER_POLICY] = enabled }
+    suspend fun updateBlockWebRtcLeaks(enabled: Boolean) = edit { it[Keys.BLOCK_WEBRTC_LEAKS] = enabled }
+    suspend fun updateLockdownCovertApis(enabled: Boolean) = edit { it[Keys.LOCKDOWN_COVERT_APIS] = enabled }
 
     suspend fun resetAppearanceDefaults() {
         context.dataStore.edit {

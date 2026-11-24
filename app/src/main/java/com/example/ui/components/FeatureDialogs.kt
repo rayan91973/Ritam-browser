@@ -430,7 +430,7 @@ fun BurnSessionOverlay(visible: Boolean) {
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        listOf(Color(0xFF1A0E0C), Color(0xFF0E1211))
+                        listOf(Color(0xFF2D2220), Color(0xFF202926))
                     )
                 ),
             contentAlignment = Alignment.Center

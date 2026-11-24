@@ -114,6 +114,9 @@ interface FilterDao {
     @Query("UPDATE filter_lists SET enabled = :enabled WHERE id = :id")
     suspend fun setFilterListEnabled(id: Long, enabled: Boolean)
 
+    @Query("UPDATE filter_lists SET ruleCount = :ruleCount, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateFilterListStats(id: Long, ruleCount: Int, updatedAt: Long)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCustomRule(rule: CustomFilterRuleEntity)
 
@@ -168,6 +171,9 @@ interface VaultDao {
     @Query("SELECT * FROM vault_entries ORDER BY createdAt DESC")
     fun observeEntries(): Flow<List<VaultEntryEntity>>
 
+    @Query("SELECT * FROM vault_entries ORDER BY createdAt DESC")
+    suspend fun getAllOnce(): List<VaultEntryEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entry: VaultEntryEntity)
 
@@ -196,5 +202,119 @@ interface ReadingListDao {
     suspend fun clearRead()
 
     @Query("DELETE FROM reading_list")
+    suspend fun clearAll()
+}
+
+@Dao
+interface UserscriptDao {
+    @Query("SELECT * FROM userscripts ORDER BY createdAt DESC")
+    fun observeAll(): Flow<List<UserscriptEntity>>
+
+    @Query("SELECT * FROM userscripts WHERE enabled = 1")
+    suspend fun getEnabledOnce(): List<UserscriptEntity>
+
+    @Query("SELECT * FROM userscripts")
+    suspend fun getAllOnce(): List<UserscriptEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(script: UserscriptEntity): Long
+
+    @Query("UPDATE userscripts SET enabled = :enabled WHERE id = :id")
+    suspend fun setEnabled(id: Long, enabled: Boolean)
+
+    @Query("DELETE FROM userscripts WHERE id = :id")
+    suspend fun deleteById(id: Long)
+}
+
+@Dao
+interface WatchlistDao {
+    @Query("SELECT * FROM watchlist_items ORDER BY hasUnreadChange DESC, lastCheckedAt DESC")
+    fun observeAll(): Flow<List<WatchlistItemEntity>>
+
+    @Query("SELECT * FROM watchlist_items")
+    suspend fun getAllOnce(): List<WatchlistItemEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(item: WatchlistItemEntity): Long
+
+    @Query("UPDATE watchlist_items SET hasUnreadChange = 0 WHERE id = :id")
+    suspend fun markSeen(id: Long)
+
+    @Query("DELETE FROM watchlist_items WHERE id = :id")
+    suspend fun deleteById(id: Long)
+}
+
+@Dao
+interface HighlightDao {
+    @Query("SELECT * FROM highlights ORDER BY createdAt DESC")
+    fun observeAll(): Flow<List<HighlightEntity>>
+
+    @Query("SELECT * FROM highlights ORDER BY createdAt DESC")
+    suspend fun getAllOnce(): List<HighlightEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(highlight: HighlightEntity): Long
+
+    @Query("DELETE FROM highlights WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    @Query("DELETE FROM highlights")
+    suspend fun clearAll()
+}
+
+@Dao
+interface RssDao {
+    @Query("SELECT * FROM rss_feeds ORDER BY lastSyncedAt DESC")
+    fun observeFeeds(): Flow<List<RssFeedEntity>>
+
+    @Query("SELECT * FROM rss_articles ORDER BY isRead ASC, fetchedAt DESC LIMIT 200")
+    fun observeArticles(): Flow<List<RssArticleEntity>>
+
+    @Query("SELECT * FROM rss_feeds")
+    suspend fun getFeedsOnce(): List<RssFeedEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertFeed(feed: RssFeedEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertArticles(articles: List<RssArticleEntity>)
+
+    @Query("UPDATE rss_articles SET isRead = :isRead WHERE id = :id")
+    suspend fun setArticleRead(id: Long, isRead: Boolean)
+
+    @Query("DELETE FROM rss_articles WHERE feedId = :feedId")
+    suspend fun deleteArticlesByFeed(feedId: Long)
+
+    @Query("DELETE FROM rss_feeds WHERE id = :feedId")
+    suspend fun deleteFeed(feedId: Long)
+}
+
+@Dao
+interface SiteUsageDao {
+    @Query("SELECT * FROM site_usage ORDER BY visitCount DESC, lastVisitedAt DESC LIMIT 16")
+    fun observeTopSites(): Flow<List<SiteUsageEntity>>
+
+    @Query("SELECT * FROM site_usage WHERE domain = :domain LIMIT 1")
+    suspend fun findByDomain(domain: String): SiteUsageEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entry: SiteUsageEntity)
+
+    @Query("DELETE FROM site_usage")
+    suspend fun clearAll()
+}
+
+@Dao
+interface QuickControlUsageDao {
+    @Query("SELECT * FROM quick_control_usage ORDER BY usageCount DESC, lastUsedAt DESC")
+    fun observeAll(): Flow<List<QuickControlUsageEntity>>
+
+    @Query("SELECT * FROM quick_control_usage WHERE controlId = :controlId LIMIT 1")
+    suspend fun findByControlId(controlId: String): QuickControlUsageEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entry: QuickControlUsageEntity)
+
+    @Query("DELETE FROM quick_control_usage")
     suspend fun clearAll()
 }
