@@ -1,11 +1,14 @@
 package com.example.ui.components
 
 import android.graphics.Bitmap
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,26 +20,34 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Contrast
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material.icons.rounded.ZoomIn
 import androidx.compose.material.icons.rounded.ZoomOut
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +65,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.services.PdfDocumentHelper
 import com.example.services.PdfViewerState
 import com.example.ui.theme.LocalRitamExtendedColors
+import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.math.roundToInt
 
@@ -66,6 +78,16 @@ fun PdfViewerDialog(
     val ext = LocalRitamExtendedColors.current
     var zoomFactor by remember { mutableFloatStateOf(1f) }
     var invertColors by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    var showJumpDialog by remember { mutableStateOf(false) }
+    var jumpTarget by remember { mutableFloatStateOf(1f) }
+    val pageCount = state.pageCount
+    val currentPage by remember {
+        derivedStateOf {
+            (listState.firstVisibleItemIndex + 1).coerceIn(1, pageCount.coerceAtLeast(1))
+        }
+    }
 
     val invertColorFilter = remember {
         ColorFilter.colorMatrix(
@@ -120,8 +142,11 @@ fun PdfViewerDialog(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = if (state.pageCount > 0) "${state.pageCount} pages • ${(zoomFactor * 100).roundToInt()}%"
-                                else "Built-in PDF Reader",
+                                text = if (pageCount > 0) {
+                                    "Page $currentPage of $pageCount • ${(zoomFactor * 100).roundToInt()}%"
+                                } else {
+                                    "Built-in PDF Reader"
+                                },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -178,28 +203,110 @@ fun PdfViewerDialog(
                         }
                     }
                     state.localFile != null && state.pageCount > 0 -> {
-                        val pageIndices = remember(state.pageCount) { (0 until state.pageCount).toList() }
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(ext.surfaceLowest)
-                                .padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            itemsIndexed(pageIndices, key = { _, idx -> idx }) { _, pageIdx ->
-                                PdfPageCard(
-                                    file = state.localFile,
-                                    pageIndex = pageIdx,
-                                    totalPages = state.pageCount,
-                                    widthPx = (1080 * zoomFactor).roundToInt(),
-                                    colorFilter = if (invertColors) invertColorFilter else null
-                                )
+                        val pageIndices = remember(pageCount) { (0 until pageCount).toList() }
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(ext.surfaceLowest)
+                                    .padding(horizontal = 12.dp),
+                                contentPadding = PaddingValues(top = 12.dp, bottom = 84.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                itemsIndexed(pageIndices, key = { _, idx -> idx }) { _, pageIdx ->
+                                    PdfPageCard(
+                                        file = state.localFile,
+                                        pageIndex = pageIdx,
+                                        totalPages = pageCount,
+                                        widthPx = (1080 * zoomFactor).roundToInt(),
+                                        colorFilter = if (invertColors) invertColorFilter else null
+                                    )
+                                }
+                            }
+
+                            // Page navigator: jumps straight to a page instead of scrolling a long PDF.
+                            Surface(
+                                shape = RoundedCornerShape(24.dp),
+                                color = ext.surfaceHigh,
+                                border = BorderStroke(1.dp, ext.cardBorder),
+                                shadowElevation = 6.dp,
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(bottom = 16.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    IconButton(
+                                        onClick = {
+                                            scope.launch {
+                                                listState.animateScrollToItem((currentPage - 2).coerceAtLeast(0))
+                                            }
+                                        },
+                                        enabled = currentPage > 1
+                                    ) {
+                                        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, contentDescription = "Previous page")
+                                    }
+                                    Text(
+                                        text = "$currentPage / $pageCount",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                        modifier = Modifier
+                                            .clickable {
+                                                jumpTarget = currentPage.toFloat()
+                                                showJumpDialog = true
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 8.dp)
+                                    )
+                                    IconButton(
+                                        onClick = {
+                                            scope.launch {
+                                                listState.animateScrollToItem((currentPage).coerceAtMost(pageCount - 1))
+                                            }
+                                        },
+                                        enabled = currentPage < pageCount
+                                    ) {
+                                        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = "Next page")
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    if (showJumpDialog && pageCount > 0) {
+        AlertDialog(
+            onDismissRequest = { showJumpDialog = false },
+            title = { Text("Go to page") },
+            text = {
+                Column {
+                    Text(
+                        text = "Page ${jumpTarget.roundToInt()} of $pageCount",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Slider(
+                        value = jumpTarget,
+                        onValueChange = { jumpTarget = it },
+                        valueRange = 1f..pageCount.toFloat(),
+                        steps = (pageCount - 2).coerceAtLeast(0)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val target = jumpTarget.roundToInt().coerceIn(1, pageCount) - 1
+                    scope.launch { listState.animateScrollToItem(target) }
+                    showJumpDialog = false
+                }) { Text("Go") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showJumpDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 

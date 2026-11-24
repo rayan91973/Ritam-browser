@@ -1,10 +1,17 @@
 package com.example.privacy
 
+import android.content.Context
 import android.net.Uri
 import android.webkit.WebResourceResponse
+import com.example.data.local.FilterListEntity
 import com.example.data.local.WebsiteSettingsEntity
 import com.example.data.preferences.BrowserPreferences
+import com.example.core.RitamLog
 import com.example.data.repository.BrowserRepository
+import com.example.privacy.adblock.AdBlockEngine
+import com.example.privacy.adblock.AdBlockFilterStore
+import com.example.privacy.adblock.AdCategory
+import com.example.privacy.adblock.RequestType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -47,9 +54,18 @@ data class SessionShieldMetrics(
 
 class RitamShieldsEngine(
     private val repository: BrowserRepository,
-    private val dohResolver: DohResolver? = null
+    private val dohResolver: DohResolver? = null,
+    private val appContext: Context? = null
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val adBlockStore: AdBlockFilterStore? = appContext?.let { AdBlockFilterStore(it) }
+
+    @Volatile
+    private var adBlockEngine: AdBlockEngine = AdBlockEngine.EMPTY
+
+    @Volatile
+    private var enabledFilterListIds: Set<String> = AdBlockFilterStore.ALL_IDS
 
     @Volatile
     private var currentPrefs: BrowserPreferences = BrowserPreferences()
@@ -120,13 +136,14 @@ class RitamShieldsEngine(
         "evil-tracker-demo.invalid"
     )
 
-    private val adultDomains = hashSetOf(
-        "pornhub.com", "xvideos.com", "xnxx.com", "redtube.com", "youporn.com",
-        "brazzers.com", "stripchat.com", "camsoda.com", "livejasmin.com",
-        "chaturbate.com", "adultfriendfinder.com", "xhamster.com", "eporner.com",
-        "spankbang.com", "hqporner.com", "tnaflix.com", "nuvid.com", "sunporno.com",
-        "tubegalore.com", "motherless.com", "anysex.com", "drtuber.com", "youjizz.com",
-        "hentaihaven.red", "nhentai.net", "gelbooru.com", "rule34.xxx"
+    // First-party YouTube ad endpoints. Player/media URLs are intentionally untouched.
+    private val youTubeAdPaths = listOf(
+        "youtube.com/api/stats/ads",
+        "youtube.com/api/stats/atr",
+        "youtube.com/pagead/",
+        "youtube.com/ptracking",
+        "youtube.com/get_midroll_info",
+        "youtube.com/youtubei/v1/player/ad_break"
     )
 
     private val adUrlSubstrings = listOf(
@@ -139,47 +156,111 @@ class RitamShieldsEngine(
         "/collect?v=", "fingerprint.min.js", "/telemetry/beacon"
     )
 
-    private val adultUrlSubstrings = listOf(
-        "/porn", "/sex", "/nude", "/xxx", "/adult", "/cammodel",
-        "/nsfw", "/erotic", "pornstar", "stripchat", "chaturbate"
-    )
 
     init {
         scope.launch {
-            repository.customFilterRules.collect { rules ->
-                synchronized(customBlockDomains) {
-                    customBlockDomains.clear()
-                    customAllowDomains.clear()
-                    customUrlTokens.clear()
-                    customCssSelectors.clear()
-                    rules.filter { it.enabled }.forEach { entity ->
-                        parseAdblockRule(entity.rule)
+            RitamLog.guarded(TAG, "initial filter-list load") { buildAndMaybeRefreshAdBlock() }
+        }
+        scope.launch {
+            try {
+                repository.customFilterRules.collect { rules ->
+                    synchronized(customBlockDomains) {
+                        customBlockDomains.clear()
+                        customAllowDomains.clear()
+                        customUrlTokens.clear()
+                        customCssSelectors.clear()
+                        rules.filter { it.enabled }.forEach { entity ->
+                            parseAdblockRule(entity.rule)
+                        }
                     }
                 }
+            } catch (error: Throwable) {
+                RitamLog.e(TAG, "custom filter rule stream failed", error)
             }
         }
         scope.launch {
-            repository.filterLists.collect { lists ->
-                lists.forEach { list ->
-                    when {
-                        list.name.contains("EasyList", ignoreCase = true) -> easyListEnabled = list.enabled
-                        list.name.contains("EasyPrivacy", ignoreCase = true) -> easyPrivacyEnabled = list.enabled
-                        list.name.contains("Peter Lowe", ignoreCase = true) -> peterLoweEnabled = list.enabled
-                        list.name.contains("Threat", ignoreCase = true) -> threatIntelEnabled = list.enabled
+            try {
+                repository.filterLists.collect { lists ->
+                    applyFilterLists(lists)
+                    lists.forEach { list ->
+                        when {
+                            list.name.contains("EasyList", ignoreCase = true) -> easyListEnabled = list.enabled
+                            list.name.contains("EasyPrivacy", ignoreCase = true) -> easyPrivacyEnabled = list.enabled
+                            list.name.contains("Peter Lowe", ignoreCase = true) -> peterLoweEnabled = list.enabled
+                            list.name.contains("Threat", ignoreCase = true) -> threatIntelEnabled = list.enabled
+                        }
                     }
                 }
+            } catch (error: Throwable) {
+                RitamLog.e(TAG, "filter list stream failed", error)
             }
         }
         scope.launch {
-            repository.websiteSettings.collect { list ->
-                siteExceptions.clear()
-                list.forEach { siteExceptions[it.domain.lowercase()] = it }
+            try {
+                repository.websiteSettings.collect { list ->
+                    siteExceptions.clear()
+                    list.forEach { siteExceptions[it.domain.lowercase()] = it }
+                }
+            } catch (error: Throwable) {
+                RitamLog.e(TAG, "site settings stream failed", error)
             }
         }
     }
 
     fun updatePreferences(preferences: BrowserPreferences) {
         currentPrefs = preferences
+    }
+
+    private fun applyFilterLists(lists: List<FilterListEntity>) {
+        val ids = HashSet<String>()
+        var sawKnownList = false
+        for (list in lists) {
+            val id = AdBlockFilterStore.sourceIdForListName(list.name) ?: continue
+            sawKnownList = true
+            if (list.enabled) ids.add(id)
+        }
+        if (!sawKnownList) return
+        if (ids != enabledFilterListIds) {
+            enabledFilterListIds = ids
+            scope.launch { adBlockEngine = loadAdBlockEngine() }
+        }
+    }
+
+    private suspend fun loadAdBlockEngine(): AdBlockEngine {
+        val store = adBlockStore ?: return AdBlockEngine.EMPTY
+        return runCatching { store.loadEngine(enabledFilterListIds) }
+            .onFailure { RitamLog.e(TAG, "compiling filter lists failed; keeping the previous engine", it) }
+            .getOrDefault(adBlockEngine)
+    }
+
+    private suspend fun buildAndMaybeRefreshAdBlock() {
+        val store = adBlockStore ?: return
+        adBlockEngine = loadAdBlockEngine()
+        if (store.isStale(AdBlockFilterStore.REFRESH_INTERVAL_MS)) {
+            val updated = runCatching { store.refresh(enabledFilterListIds) }
+                .onFailure { RitamLog.w(TAG, "scheduled filter-list refresh failed", it) }
+                .getOrDefault(0)
+            if (updated > 0) adBlockEngine = loadAdBlockEngine()
+        }
+    }
+
+    /** Downloads fresh copies of the enabled filter lists. Returns how many were replaced. */
+    suspend fun refreshAdBlockLists(force: Boolean = false): Int {
+        val store = adBlockStore ?: return 0
+        if (!force && !store.isStale(AdBlockFilterStore.REFRESH_INTERVAL_MS)) return 0
+        val updated = runCatching { store.refresh(enabledFilterListIds) }
+            .onFailure { RitamLog.w(TAG, "manual filter-list refresh failed", it) }
+            .getOrDefault(0)
+        if (updated > 0) adBlockEngine = loadAdBlockEngine()
+        return updated
+    }
+
+    fun adBlockRuleCounts(): Pair<Int, Int> =
+        adBlockEngine.networkRuleCount to adBlockEngine.cosmeticRuleCount
+
+    fun adBlockRuleCountForList(listName: String): Int {
+        val id = AdBlockFilterStore.sourceIdForListName(listName) ?: return 0
+        return adBlockStore?.ruleCountFor(id) ?: 0
     }
 
     private fun parseAdblockRule(rawRule: String) {
@@ -206,6 +287,12 @@ class RitamShieldsEngine(
             }
             else -> customUrlTokens.add(rule)
         }
+    }
+
+    private fun isYouTubeAdRequest(host: String, requestUrl: String): Boolean {
+        if (!host.endsWith("youtube.com") && !host.endsWith("youtube-nocookie.com")) return false
+        val lower = requestUrl.lowercase()
+        return youTubeAdPaths.any { lower.contains(it) }
     }
 
     fun isMaliciousUrl(url: String): Boolean {
@@ -434,8 +521,19 @@ class RitamShieldsEngine(
             }.distinct()
         }
         val baseSelectors = "ins.adsbygoogle, [id^=\"google_ads_\"], [id^=\"div-gpt-ad\"], .adsbygoogle, .ad-banner, .ad-container, .sponsored-ad, [data-ad-slot], [data-google-query-id], iframe[src*=\"doubleclick.net\"], iframe[src*=\"googlesyndication.com\"]"
-        val combined = if (extraSelectors.isEmpty()) baseSelectors else "$baseSelectors, ${extraSelectors.joinToString(", ")}"
-        val escapedCss = "$combined { display: none !important; visibility: hidden !important; height: 0 !important; min-height: 0 !important; }"
+        val engine = adBlockEngine
+        val engineCss = if (engine.isUsable) {
+            engine.cosmeticCss(cleanHost, engine.allowsGenericCosmetic(cleanHost))
+        } else {
+            ""
+        }
+        val customCss = if (extraSelectors.isEmpty()) "" else "${extraSelectors.joinToString(",")} { display: none !important; }"
+        val combinedCss = listOf(
+            engineCss,
+            "$baseSelectors { display: none !important; }",
+            customCss
+        ).filter { it.isNotBlank() }.joinToString("\n")
+        val escapedCss = combinedCss
             .replace("\\", "\\\\")
             .replace("'", "\\'")
             .replace("\n", " ")
@@ -638,6 +736,8 @@ class RitamShieldsEngine(
     fun forceWebDarkScript(enabled: Boolean): String = buildForceWebDarkScript(enabled)
 
     companion object {
+        private const val TAG = "RitamShields"
+
         fun buildForceWebDarkScript(enabled: Boolean): String = if (enabled) {
         """
         (function() {
@@ -869,7 +969,8 @@ class RitamShieldsEngine(
     fun shouldInterceptRequest(
         requestUrl: String,
         pageDomain: String,
-        isPrivate: Boolean
+        isPrivate: Boolean,
+        requestType: RequestType = RequestType.OTHER
     ): BlockDecision {
         val host = extractHost(requestUrl) ?: return BlockDecision(false, BlockCategory.ALLOWED)
         val cleanPageDomain = pageDomain.lowercase().removePrefix("www.")
@@ -893,6 +994,38 @@ class RitamShieldsEngine(
             if (matchedToken != null) {
                 return recordBlock(cleanPageDomain, host, BlockCategory.AD, "custom-rule:$matchedToken", 24_000L, isPrivate)
             }
+        }
+
+        // Filter lists can whitelist a whole site (`@@||site^$document`).
+        val engine = adBlockEngine
+        if (engine.isUsable && engine.isWhitelisted(cleanPageDomain)) {
+            return BlockDecision(false, BlockCategory.ALLOWED)
+        }
+
+        // EasyList / EasyPrivacy / Peter Lowe network filtering
+        if (engine.isUsable) {
+            val match = engine.findBlockingRule(requestUrl, cleanPageDomain, requestType)
+            if (match != null) {
+                val shieldEnabled = when (match.category) {
+                    AdCategory.AD -> currentPrefs.adBlockingEnabled
+                    AdCategory.TRACKER -> currentPrefs.trackerBlockingEnabled
+                }
+                if (shieldEnabled) {
+                    val category = if (match.category == AdCategory.TRACKER) {
+                        BlockCategory.TRACKER
+                    } else {
+                        BlockCategory.AD
+                    }
+                    val estimate = if (category == BlockCategory.TRACKER) 18_500L else 48_000L
+                    return recordBlock(cleanPageDomain, host, category, match.rule, estimate, isPrivate)
+                }
+            }
+        }
+
+        // YouTube serves its pre-roll/mid-roll ads from its own origin, so filter lists cannot
+        // catch them. Block only the ad endpoints, never the player or media streams.
+        if (currentPrefs.adBlockingEnabled && isYouTubeAdRequest(host, requestUrl)) {
+            return recordBlock(cleanPageDomain, host, BlockCategory.AD, "youtube-ad-endpoint", 64_000L, isPrivate)
         }
 
         // Never block first-party main host resources unless explicitly in custom rules
@@ -924,14 +1057,21 @@ class RitamShieldsEngine(
             }
         }
 
-        // Adult & Nude Content blocking check
-        if (matchesDomainSet(host, adultDomains)) {
+        // Adult & nude content blocking (shared policy with typed input / navigation guard)
+        if (AdultContentPolicy.isBlockedHost(host)) {
             return recordBlock(cleanPageDomain, host, BlockCategory.MALICIOUS, "adult-domain:$host", 50_000L, isPrivate)
         }
-        val lowerUrl = requestUrl.lowercase()
-        val adultToken = adultUrlSubstrings.firstOrNull { lowerUrl.contains(it) }
-        if (adultToken != null && (lowerUrl.contains("porn") || lowerUrl.contains("sex") || lowerUrl.contains("nude") || lowerUrl.contains("xxx"))) {
-            return recordBlock(cleanPageDomain, host, BlockCategory.MALICIOUS, "adult-keyword:$adultToken", 40_000L, isPrivate)
+        if (AdultContentPolicy.hasAdultHint(requestUrl)) {
+            AdultContentPolicy.checkUrl(requestUrl)?.let { verdict ->
+                return recordBlock(
+                    cleanPageDomain,
+                    host,
+                    BlockCategory.MALICIOUS,
+                    "adult:${verdict.matched}",
+                    40_000L,
+                    isPrivate
+                )
+            }
         }
 
         // Encrypted DNS (DoH) blocklist enforcement (cached check + async warm-up)
@@ -965,6 +1105,10 @@ class RitamShieldsEngine(
             bytesSaved = current.bytesSaved + estimatedBytes,
             lastBlockedDomain = blockedHost
         )
+
+        if (com.example.BuildConfig.DEBUG) {
+            android.util.Log.d("RitamShields", "blocked $category $blockedHost rule=$rule page=$pageDomain")
+        }
 
         if (!isPrivate && pageDomain.isNotBlank()) {
             val typeStr = if (category == BlockCategory.TRACKER) "TRACKER" else "AD"

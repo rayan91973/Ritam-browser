@@ -1,9 +1,9 @@
 package com.example.services
 
 import android.net.Uri
+import com.example.core.RitamHttp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import java.net.URLEncoder
@@ -28,7 +28,7 @@ object TranslationHelper {
         TranslateLanguage("zh-CN", "Chinese", "中文")
     )
 
-    private val client = OkHttpClient.Builder()
+    private val client = RitamHttp.builder()
         .connectTimeout(6, TimeUnit.SECONDS)
         .readTimeout(6, TimeUnit.SECONDS)
         .build()

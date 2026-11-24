@@ -2,6 +2,7 @@ package com.example
 
 import android.app.Application
 import android.content.Context
+import android.webkit.WebView
 import com.example.browser.WebViewManager
 import com.example.data.local.RitamDatabase
 import com.example.data.preferences.PreferencesRepository
@@ -52,7 +53,7 @@ class AppContainer(context: Context) {
     }
 
     val shieldsEngine: RitamShieldsEngine by lazy {
-        RitamShieldsEngine(browserRepository, dohResolver)
+        RitamShieldsEngine(browserRepository, dohResolver, appContext)
     }
 
     val webViewManager: WebViewManager by lazy {
@@ -74,6 +75,8 @@ class RitamApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Never expose WebView debugging in release builds.
+        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
         container = AppContainer(this)
     }
 }

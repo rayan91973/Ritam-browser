@@ -21,6 +21,7 @@ import android.webkit.DownloadListener
 import android.webkit.GeolocationPermissions
 import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
 import android.webkit.URLUtil
 import android.webkit.WebChromeClient
@@ -31,11 +32,14 @@ import android.webkit.WebSettings
 import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import com.example.core.RitamLog
 import com.example.data.local.UserscriptEntity
+import com.example.privacy.AdultContentPolicy
 import com.example.privacy.BlockCategory
 import com.example.privacy.HomographAndPhishingGuard
 import com.example.privacy.HomographWarningState
 import com.example.privacy.RitamShieldsEngine
+import com.example.privacy.adblock.RequestType
 import com.example.privacy.UrlCleaner
 import org.json.JSONObject
 import java.io.File
@@ -56,6 +60,39 @@ class WebViewManager(
     private val bypassedHomographHosts = ConcurrentHashMap.newKeySet<String>()
     private val playingMediaTabs = ConcurrentHashMap.newKeySet<String>()
     private val pinnedTabIds = ConcurrentHashMap.newKeySet<String>()
+    private val privateTabIds = ConcurrentHashMap.newKeySet<String>()
+
+    @Volatile
+    private var isNetworkOnline: Boolean = com.example.services.RitamCacheManager.isOnline(context)
+
+    init {
+        // WebView's cache mode is fixed when a WebView is created, so a tab opened online kept
+        // failing offline reloads even though a cached copy existed. Follow connectivity changes
+        // and re-apply the mode on every live WebView.
+        runCatching {
+            val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE)
+                as? android.net.ConnectivityManager
+            manager?.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) = applyConnectivity(true)
+                override fun onLost(network: android.net.Network) = applyConnectivity(false)
+            })
+        }.onFailure { RitamLog.w(TAG, "connectivity monitoring unavailable", it) }
+    }
+
+    private fun applyConnectivity(online: Boolean) {
+        if (isNetworkOnline == online) return
+        isNetworkOnline = online
+        mainHandler.post {
+            liveWebViews.forEach { (tabId, webView) ->
+                runCatching {
+                    webView.settings.cacheMode = resolveCacheMode(
+                        isPrivate = privateTabIds.contains(tabId),
+                        isOnline = online
+                    )
+                }
+            }
+        }
+    }
     private val mainHandler = Handler(Looper.getMainLooper())
     @Volatile
     var confirmExternalAppLaunch: Boolean = true
@@ -77,6 +114,9 @@ class WebViewManager(
     var lockdownCovertApisEnabled: Boolean = true
     @Volatile
     var stripTrackingParamsEnabled: Boolean = true
+
+    @Volatile
+    private var backgroundMode: Boolean = false
 
     interface Callbacks {
         fun onPageProgress(tabId: String, progress: Int)
@@ -107,6 +147,7 @@ class WebViewManager(
         fun onHttpsUpgraded(tabId: String, domain: String) {}
         fun onWebPermissionRequested(request: WebPermissionPromptRequest) {}
         fun onTemporaryGrantsCleared(tabId: String) {}
+        fun onAdultContentBlocked(tabId: String, url: String, matched: String) {}
     }
 
     private var callbacks: Callbacks? = null
@@ -139,6 +180,26 @@ class WebViewManager(
         pinnedTabIds.addAll(ids)
     }
 
+    /**
+     * Enables background/PiP playback protection on every live WebView. While active, a video the
+     * page paused by itself is restarted; explicit user pauses are respected.
+     */
+    fun setBackgroundMode(active: Boolean) {
+        backgroundMode = active
+        mainHandler.post {
+            liveWebViews.values.forEach { wv ->
+                runCatching {
+                    wv.onResume()
+                    wv.resumeTimers()
+                    wv.evaluateJavascript(
+                        SiteAdBlockScripts.mediaKeepAliveScript(backgroundMode),
+                        null
+                    )
+                }
+            }
+        }
+    }
+
     fun resumeAllLiveWebViews() {
         mainHandler.post {
             liveWebViews.values.forEach { wv ->
@@ -152,10 +213,12 @@ class WebViewManager(
 
     fun onEnteringPipMode(tabId: String) {
         val wv = liveWebViews[tabId] ?: return
+        backgroundMode = true
         runCatching {
             wv.onResume()
             wv.resumeTimers()
         }
+        wv.evaluateJavascript(SiteAdBlockScripts.mediaKeepAliveScript(true), null)
         wv.evaluateJavascript(
             """
             (function() {
@@ -176,37 +239,83 @@ class WebViewManager(
 
     fun setPipVideoFocusMode(tabId: String, active: Boolean) {
         val wv = liveWebViews[tabId] ?: return
+        backgroundMode = active
         if (active) {
             runCatching {
                 wv.onResume()
                 wv.resumeTimers()
             }
+            wv.evaluateJavascript(SiteAdBlockScripts.mediaKeepAliveScript(true), null)
             wv.evaluateJavascript(
                 """
                 (function() {
                     try {
+                        // PiP shows the WebView 1:1. Lift the playing video over the page so the
+                        // window contains the video, not the site chrome around it. The style is
+                        // re-applied for a few seconds because players rebuild the <video>
+                        // element right after a mode change, and gate it on metadata being ready.
+                        window.__ritamPipActive = true;
                         var styleId = 'ritam-pip-focus-style';
                         var s = document.getElementById(styleId);
                         if (!s) {
                             s = document.createElement('style');
                             s.id = styleId;
-                            s.textContent = 'html.ritam-pip-active body > * { visibility: hidden !important; } html.ritam-pip-active video[data-ritam-pip-target="1"] { visibility: visible !important; position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; object-fit: contain !important; background: #000 !important; z-index: 2147483647 !important; }';
+                            // The video lives inside the player's stacking context, so page
+                            // containers (YouTube's white drawer) still paint above a fixed video.
+                            // Hiding every element with visibility (an inherited property) and then
+                            // marking the video visible keeps playback and removes all page chrome.
+                            s.textContent =
+                                'html.ritam-pip-active, html.ritam-pip-active body { background: #000 !important; }' +
+                                'html.ritam-pip-active body * { visibility: hidden !important; }' +
+                                'html.ritam-pip-active video[data-ritam-pip-target="1"] { visibility: visible !important; position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; object-fit: contain !important; background: #000 !important; z-index: 2147483647 !important; }';
                             (document.head || document.documentElement).appendChild(s);
                         }
-                        var vids = document.querySelectorAll('video');
-                        var target = null;
-                        for (var i = 0; i < vids.length; i++) {
-                            if (!vids[i].paused && !vids[i].ended) { target = vids[i]; break; }
+                        document.documentElement.classList.add('ritam-pip-active');
+
+                        function pickTarget() {
+                            var vids = document.querySelectorAll('video');
+                            var playing = null, ready = null, first = null;
+                            for (var i = 0; i < vids.length; i++) {
+                                var v = vids[i];
+                                if (!first) first = v;
+                                if (!v.paused && !v.ended) { playing = v; break; }
+                                if (!ready && v.videoWidth > 0) ready = v;
+                            }
+                            return playing || ready || first;
                         }
-                        if (!target && vids.length > 0) target = vids[0];
-                        if (target) {
-                            if (target.dataset.ritamKeepPlaying === '1' && target.paused) {
-                                target.play().catch(function(){});
+
+                        function apply() {
+                            if (!window.__ritamPipActive) return;
+                            var target = pickTarget();
+                            var current = document.querySelectorAll('video[data-ritam-pip-target]');
+                            for (var c = 0; c < current.length; c++) {
+                                if (current[c] !== target) current[c].removeAttribute('data-ritam-pip-target');
                             }
-                            if (target.videoWidth > 0 && document.fullscreenElement == null) {
-                                target.setAttribute('data-ritam-pip-target', '1');
-                                document.documentElement.classList.add('ritam-pip-active');
+                            if (!target) return;
+                            window.__ritamBackgroundMode = true;
+                            if (target.paused && !target.ended) target.play().catch(function(){});
+                            if (document.fullscreenElement == null) {
+                                if (!target.hasAttribute('data-ritam-pip-target')) {
+                                    target.setAttribute('data-ritam-pip-target', '1');
+                                }
                             }
+                        }
+
+                        apply();
+                        if (window.__ritamPipTimer) clearInterval(window.__ritamPipTimer);
+                        var ticks = 0;
+                        window.__ritamPipTimer = setInterval(function() {
+                            apply();
+                            if (++ticks > 40) { clearInterval(window.__ritamPipTimer); window.__ritamPipTimer = null; }
+                        }, 250);
+                        if (!window.__ritamPipObserver) {
+                            try {
+                                window.__ritamPipObserver = new MutationObserver(function() { apply(); });
+                                window.__ritamPipObserver.observe(document.documentElement, { childList: true, subtree: true });
+                            } catch (e) {}
+                        }
+                        if (window.RitamBridge) {
+                            try { window.RitamBridge.onMediaStateChanged(true, true); } catch (e) {}
                         }
                     } catch (e) {}
                 })();
@@ -218,6 +327,9 @@ class WebViewManager(
                 """
                 (function() {
                     try {
+                        window.__ritamPipActive = false;
+                        if (window.__ritamPipTimer) { clearInterval(window.__ritamPipTimer); window.__ritamPipTimer = null; }
+                        if (window.__ritamPipObserver) { window.__ritamPipObserver.disconnect(); window.__ritamPipObserver = null; }
                         document.documentElement.classList.remove('ritam-pip-active');
                         var vids = document.querySelectorAll('video[data-ritam-pip-target]');
                         for (var i = 0; i < vids.length; i++) {
@@ -282,6 +394,7 @@ class WebViewManager(
                 allowUniversalAccessFromFileURLs = false
                 mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                 safeBrowsingEnabled = true
+                if (tab.isPrivate) privateTabIds.add(tab.id) else privateTabIds.remove(tab.id)
                 cacheMode = resolveCacheMode(
                     isPrivate = tab.isPrivate,
                     isOnline = com.example.services.RitamCacheManager.isOnline(context)
@@ -382,11 +495,16 @@ class WebViewManager(
 
                 override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
                     if (consoleMessage != null) {
+                        val message = consoleMessage.message() ?: ""
+                        // Debug builds only: surface page logs in logcat for on-device diagnosis.
+                        if (message.contains("[Ritam]") || message.contains("Ritam")) {
+                            RitamLog.d("RitamPage", "${tab.id} $message")
+                        }
                         callbacks?.onConsoleMessage(
                             tab.id,
                             ConsoleLogEntry(
                                 level = consoleMessage.messageLevel()?.name ?: "LOG",
-                                message = consoleMessage.message() ?: "",
+                                message = message,
                                 sourceId = consoleMessage.sourceId() ?: "",
                                 lineNumber = consoleMessage.lineNumber()
                             )
@@ -505,6 +623,11 @@ class WebViewManager(
                         return true
                     }
 
+                    AdultContentPolicy.checkUrl(reqUrl)?.let { verdict ->
+                        callbacks?.onAdultContentBlocked(tab.id, reqUrl, verdict.matched)
+                        return true
+                    }
+
                     if (scheme != "http" && scheme != "https") {
                         val fallbackUrl = extractIntentFallbackUrl(reqUrl)
                         if (confirmExternalAppLaunch) {
@@ -589,10 +712,14 @@ class WebViewManager(
                         reqUrl.let { runCatching { Uri.parse(it).host }.getOrNull() ?: "" }
                     }
                     val reqHost = request.url.host?.lowercase()?.removePrefix("www.") ?: ""
+                    val accept = request.requestHeaders?.entries
+                        ?.firstOrNull { it.key.equals("Accept", ignoreCase = true) }
+                        ?.value
                     val decision = shieldsEngine.shouldInterceptRequest(
                         requestUrl = reqUrl,
                         pageDomain = pageHost,
-                        isPrivate = tab.isPrivate
+                        isPrivate = tab.isPrivate,
+                        requestType = RequestType.classify(accept)
                     )
                     callbacks?.onNetworkRequest(
                         tab.id,
@@ -612,6 +739,11 @@ class WebViewManager(
 
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     if (!url.isNullOrBlank()) {
+                        AdultContentPolicy.checkUrl(url)?.let { verdict ->
+                            view?.stopLoading()
+                            callbacks?.onAdultContentBlocked(tab.id, url, verdict.matched)
+                            return
+                        }
                         val newHost = runCatching { Uri.parse(url).host }.getOrNull()
                             ?.lowercase()?.removePrefix("www.") ?: ""
                         val prevHost = tabLastHost[tab.id]
@@ -650,6 +782,20 @@ class WebViewManager(
                     }
                 }
 
+                override fun onRenderProcessGone(
+                    view: WebView?,
+                    detail: RenderProcessGoneDetail?
+                ): Boolean {
+                    val crashed = view ?: return true
+                    RitamLog.e("RitamWebView", "renderer gone for tab ${tab.id} (crashed=${detail?.didCrash()})")
+                    liveWebViews.remove(tab.id)
+                    playingMediaTabs.remove(tab.id)
+                    runCatching { crashed.destroy() }
+                    callbacks?.onLoadError(tab.id, "The page renderer stopped unexpectedly. Reload the tab to continue.")
+                    // Handled: returning false here would crash the whole app.
+                    return true
+                }
+
                 override fun onReceivedSslError(
                     view: WebView?,
                     handler: SslErrorHandler?,
@@ -674,7 +820,7 @@ class WebViewManager(
                     if (request?.isForMainFrame == true) {
                         callbacks?.onLoadError(
                             tab.id,
-                            error?.description?.toString() ?: "Unable to reach page"
+                            NetworkErrorCopy.describe(error?.description?.toString())
                         )
                     }
                 }
@@ -727,6 +873,7 @@ class WebViewManager(
         zoomByTab[tab.id] = tab.zoomPercent
         applyDesktopUserAgent(webView, tab.isDesktopMode, tab.zoomPercent)
         applyNativeForceDark(webView, false)
+        if (tab.isPrivate) privateTabIds.add(tab.id) else privateTabIds.remove(tab.id)
         val targetCacheMode = resolveCacheMode(
             isPrivate = tab.isPrivate,
             isOnline = com.example.services.RitamCacheManager.isOnline(context)
@@ -737,12 +884,6 @@ class WebViewManager(
         val cookieManager = CookieManager.getInstance()
         cookieManager.setAcceptCookie(!tab.isPrivate)
         cookieManager.setAcceptThirdPartyCookies(webView, !tab.isPrivate && !blockThirdPartyCookies)
-    }
-
-    private fun resolveCacheMode(isPrivate: Boolean, isOnline: Boolean): Int = when {
-        isPrivate -> WebSettings.LOAD_NO_CACHE
-        isOnline -> WebSettings.LOAD_DEFAULT
-        else -> WebSettings.LOAD_CACHE_ELSE_NETWORK
     }
 
     fun setDesktopMode(tabId: String, desktopMode: Boolean, reloadIfLoaded: Boolean) {
@@ -855,6 +996,14 @@ class WebViewManager(
     }
 
     companion object {
+        internal fun resolveCacheMode(isPrivate: Boolean, isOnline: Boolean): Int = when {
+            isPrivate -> WebSettings.LOAD_NO_CACHE
+            isOnline -> WebSettings.LOAD_DEFAULT
+            else -> WebSettings.LOAD_CACHE_ELSE_NETWORK
+        }
+
+        private const val TAG = "RitamWebView"
+
         private const val DESKTOP_USER_AGENT =
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
     }
@@ -932,6 +1081,10 @@ class WebViewManager(
         if (shieldsEngine.shouldBlockCookieBanners(host)) {
             webView.evaluateJavascript(shieldsEngine.cookieConsentBlockerScript(), null)
         }
+        if (SiteAdBlockScripts.isYouTubeHost(host)) {
+            webView.evaluateJavascript(SiteAdBlockScripts.youTubeAdBlockScript, null)
+        }
+        webView.evaluateJavascript(SiteAdBlockScripts.mediaKeepAliveScript(backgroundMode), null)
         val forceDark = shieldsEngine.shouldForceDarkForDomain(host)
         if (forceDark) {
             webView.evaluateJavascript(shieldsEngine.forceWebDarkScript(true), null)
@@ -1492,6 +1645,7 @@ class WebViewManager(
         tabLastHost.remove(tabId)
         playingMediaTabs.remove(tabId)
         pinnedTabIds.remove(tabId)
+        privateTabIds.remove(tabId)
         liveWebViews.remove(tabId)?.let { webView ->
             if (wasPrivate) {
                 webView.clearCache(true)

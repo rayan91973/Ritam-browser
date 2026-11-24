@@ -365,7 +365,11 @@ fun LibraryScreen(
                 onAddFolder = onAddFolder,
                 onDeleteBookmark = onDeleteBookmark,
                 onExportHtml = { exportBookmarksLauncher.launch("ritam_bookmarks.html") },
-                onImportHtml = { importBookmarksLauncher.launch(arrayOf("text/html", "*/*")) }
+                onImportHtml = {
+                    importBookmarksLauncher.launch(
+                        arrayOf("text/html", "application/json", "text/plain", "application/octet-stream")
+                    )
+                }
             )
 
             LibraryTab.READING_LIST -> ReadingListTabContent(
@@ -1231,9 +1235,16 @@ private fun BookmarksTabContent(
                 ) {
                     Icon(Icons.Rounded.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Import HTML")
+                    Text("Import browser")
                 }
             }
+            Text(
+                text = "Bookmarks from Chrome, Edge, Firefox, Safari, Opera, Brave or Vivaldi. " +
+                    "Choose the .html or .json file they export; folders and duplicates are handled.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp, start = 2.dp)
+            )
             Spacer(Modifier.height(10.dp))
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),

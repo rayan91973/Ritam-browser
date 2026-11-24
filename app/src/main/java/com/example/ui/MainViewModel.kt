@@ -58,6 +58,7 @@ import com.example.data.preferences.OmniboxTopology
 import com.example.data.preferences.ProfilePersona
 import com.example.data.preferences.SearchEngine
 import com.example.data.preferences.ThemePalette
+import com.example.privacy.AdultContentPolicy
 import com.example.privacy.BlockCategory
 import com.example.privacy.DnsProvider
 import com.example.privacy.DohResolutionResult
@@ -200,6 +201,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _maliciousWarning = MutableStateFlow<MaliciousWarningState?>(null)
     val maliciousWarning: StateFlow<MaliciousWarningState?> = _maliciousWarning.asStateFlow()
+
+    private val _adultBlockNotice = MutableStateFlow<AdultBlockNotice?>(null)
+    val adultBlockNotice: StateFlow<AdultBlockNotice?> = _adultBlockNotice.asStateFlow()
 
     private val _findInPageActive = MutableStateFlow(false)
     val findInPageActive: StateFlow<Boolean> = _findInPageActive.asStateFlow()
@@ -696,6 +700,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _webPermissionPrompt.value = request
             }
 
+            override fun onAdultContentBlocked(tabId: String, url: String, matched: String) {
+                webViewManager.stopLoading(tabId)
+                _adultBlockNotice.value = AdultBlockNotice(matched, url)
+            }
+
             override fun onTemporaryGrantsCleared(tabId: String) {
                 updateTab(tabId) { it.copy(activeSensorGrants = emptySet()) }
             }
@@ -713,6 +722,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         val trimmed = rawInput.trim()
         if (trimmed.isEmpty()) return
+
+        // Typed porn/nude queries never leave the device; explain the policy instead.
+        AdultContentPolicy.checkInput(trimmed)?.let { verdict ->
+            _adultBlockNotice.value = AdultBlockNotice(verdict.matched, trimmed)
+            return
+        }
 
         var resolvedUrl = resolveInputToUrl(trimmed)
         val targetTab = _tabs.value.firstOrNull { it.id == tabId } ?: activeTab.value
@@ -821,6 +836,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openUrlInNewTab(url: String, isPrivate: Boolean = false, isStandalonePwa: Boolean = false) {
+        AdultContentPolicy.checkUrl(url)?.let { verdict ->
+            _adultBlockNotice.value = AdultBlockNotice(verdict.matched, url)
+            return
+        }
         val cleaned = if (preferences.value.stripTrackingParams) UrlCleaner.cleanUrl(url).cleanedUrl else url
         val upgraded = shieldsEngine.maybeUpgradeToHttps(cleaned, null)
         val isDesktop = preferences.value.defaultDesktopMode
@@ -1328,11 +1347,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun importBookmarksFromUri(context: Context, uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
-                val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
-                val count = repository.importBookmarksFromHtml(content)
-                showMessage("Imported $count bookmarks")
+                val content = context.contentResolver.openInputStream(uri)
+                    ?.bufferedReader()
+                    ?.use { it.readText() }
+                    .orEmpty()
+                if (content.isBlank()) {
+                    showMessage("That file is empty or couldn't be read")
+                    return@launch
+                }
+                val summary = repository.importBrowserData(content)
+                showMessage(
+                    if (summary.bookmarksAdded == 0) {
+                        "No bookmarks found. Choose a bookmarks HTML or JSON export from your other browser."
+                    } else {
+                        summary.toMessage()
+                    }
+                )
             }.onFailure {
-                showMessage("Import failed")
+                showMessage("Import failed. Make sure the file is a browser bookmarks export.")
             }
         }
     }
@@ -2434,15 +2466,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun syncAllFilterLists() {
         viewModelScope.launch {
             val lists = repository.getFilterListsOnce()
+            val updated = shieldsEngine.refreshAdBlockLists(force = true)
             var synced = 0
             lists.filter { it.enabled }.forEach { list ->
-                WatchlistAndSyncHelper.syncFilterListRuleCount(list.source, list.ruleCount)
+                runCatching { shieldsEngine.adBlockRuleCountForList(list.name) }
                     .onSuccess { newCount ->
                         repository.updateFilterListStats(list.id, newCount, System.currentTimeMillis())
                         synced++
                     }
             }
-            showMessage("Synchronized $synced active shield filter list(s)")
+            val (networkRules, cosmeticRules) = shieldsEngine.adBlockRuleCounts()
+            val suffix = if (updated > 0) "$updated refreshed from upstream" else "using bundled copies"
+            showMessage("Shields: $synced list(s), $networkRules network / $cosmeticRules cosmetic rules ($suffix)")
         }
     }
 
@@ -2666,6 +2701,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }.getOrDefault("")
     }
 
+    fun dismissAdultBlockNotice() {
+        _adultBlockNotice.value = null
+    }
+
     private fun updateTab(tabId: String, transform: (TabState) -> TabState) {
         _tabs.update { list ->
             list.map { if (it.id == tabId) transform(it) else it }
@@ -2681,3 +2720,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 }
+
+/** Shown when a query/URL is refused by the adult-content policy. */
+data class AdultBlockNotice(val matched: String, val attemptedInput: String)

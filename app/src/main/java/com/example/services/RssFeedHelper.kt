@@ -1,9 +1,9 @@
 package com.example.services
 
+import com.example.core.RitamHttp
 import com.example.data.local.RssArticleEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
@@ -18,7 +18,7 @@ data class ParsedRssFeed(
 )
 
 object RssFeedHelper {
-    private val client = OkHttpClient.Builder()
+    private val client = RitamHttp.builder()
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
         .followRedirects(true)

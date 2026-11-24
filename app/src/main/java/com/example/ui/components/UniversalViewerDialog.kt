@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
@@ -56,6 +57,7 @@ import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Replay10
+import androidx.compose.material.icons.rounded.RotateRight
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Slideshow
 import androidx.compose.material.icons.rounded.TableChart
@@ -63,6 +65,7 @@ import androidx.compose.material.icons.rounded.VolumeOff
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.ZoomIn
 import androidx.compose.material.icons.rounded.ZoomOut
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -73,9 +76,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -293,6 +298,7 @@ private fun viewerIconFor(type: UniversalFileType): ImageVector = when (type) {
 private fun BuiltInImageViewer(file: File, title: String) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
+    var rotation by remember { mutableIntStateOf(0) }
 
     Box(
         modifier = Modifier
@@ -317,6 +323,7 @@ private fun BuiltInImageViewer(file: File, title: String) {
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
+                    rotationZ = rotation.toFloat()
                     translationX = offset.x
                     translationY = offset.y
                 }
@@ -354,15 +361,22 @@ private fun BuiltInImageViewer(file: File, title: String) {
                 ) {
                     Icon(Icons.Rounded.ZoomIn, contentDescription = "Zoom in", tint = Color.White, modifier = Modifier.size(18.dp))
                 }
-                if (scale > 1f) {
+                IconButton(
+                    onClick = { rotation = (rotation + 90) % 360 },
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Icon(Icons.Rounded.RotateRight, contentDescription = "Rotate 90 degrees", tint = Color.White, modifier = Modifier.size(18.dp))
+                }
+                if (scale > 1f || rotation != 0) {
                     IconButton(
                         onClick = {
                             scale = 1f
+                            rotation = 0
                             offset = Offset.Zero
                         },
                         modifier = Modifier.size(38.dp)
                     ) {
-                        Icon(Icons.Rounded.Refresh, contentDescription = "Reset zoom", tint = Color.White, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Rounded.Refresh, contentDescription = "Reset view", tint = Color.White, modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -613,9 +627,10 @@ private fun BuiltInAudioPlayer(file: File, title: String) {
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary
                 )
-                if (loadError != null) {
+                val errorText = loadError
+                if (errorText != null) {
                     Spacer(Modifier.height(10.dp))
-                    Text(loadError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    Text(errorText, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 } else {
                     Spacer(Modifier.height(18.dp))
                     Slider(
@@ -714,6 +729,15 @@ private fun BuiltInPdfViewer(file: File, pageCount: Int) {
     val ext = LocalRitamExtendedColors.current
     var zoomFactor by remember { mutableFloatStateOf(1f) }
     var invertColors by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    var showJumpDialog by remember { mutableStateOf(false) }
+    var jumpTarget by remember { mutableFloatStateOf(1f) }
+    val currentPage by remember {
+        derivedStateOf {
+            (listState.firstVisibleItemIndex + 1).coerceIn(1, pageCount.coerceAtLeast(1))
+        }
+    }
 
     val invertColorFilter = remember {
         ColorFilter.colorMatrix(
@@ -738,7 +762,7 @@ private fun BuiltInPdfViewer(file: File, pageCount: Int) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = "$pageCount pages • ${(zoomFactor * 100).roundToInt()}%",
+                text = "Page $currentPage of $pageCount • ${(zoomFactor * 100).roundToInt()}%",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -760,49 +784,130 @@ private fun BuiltInPdfViewer(file: File, pageCount: Int) {
             }
         }
         val pageIndices = remember(pageCount) { (0 until pageCount).toList() }
-        LazyColumn(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .background(ext.surfaceLowest)
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            itemsIndexed(pageIndices, key = { _, idx -> idx }) { _, pageIdx ->
-                var bmp by remember(file.absolutePath, pageIdx, zoomFactor) { mutableStateOf<Bitmap?>(null) }
-                LaunchedEffect(file.absolutePath, pageIdx, zoomFactor) {
-                    bmp = PdfDocumentHelper.renderPage(file, pageIdx, (1080 * zoomFactor).roundToInt())
-                }
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = Color.White,
-                    tonalElevation = 2.dp,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column {
-                        if (bmp == null) {
-                            Box(modifier = Modifier.fillMaxWidth().height(320.dp), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(modifier = Modifier.size(26.dp))
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(ext.surfaceLowest)
+                    .padding(horizontal = 12.dp),
+                contentPadding = PaddingValues(top = 12.dp, bottom = 84.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                itemsIndexed(pageIndices, key = { _, idx -> idx }) { _, pageIdx ->
+                    var bmp by remember(file.absolutePath, pageIdx, zoomFactor) { mutableStateOf<Bitmap?>(null) }
+                    LaunchedEffect(file.absolutePath, pageIdx, zoomFactor) {
+                        bmp = PdfDocumentHelper.renderPage(file, pageIdx, (1080 * zoomFactor).roundToInt())
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color.White,
+                        tonalElevation = 2.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column {
+                            val renderedPage = bmp
+                            if (renderedPage == null) {
+                                Box(modifier = Modifier.fillMaxWidth().height(320.dp), contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator(modifier = Modifier.size(26.dp))
+                                }
+                            } else {
+                                Image(
+                                    bitmap = renderedPage.asImageBitmap(),
+                                    contentDescription = "PDF Page ${pageIdx + 1}",
+                                    contentScale = ContentScale.FillWidth,
+                                    colorFilter = if (invertColors) invertColorFilter else null,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
                             }
-                        } else {
-                            Image(
-                                bitmap = bmp!!.asImageBitmap(),
-                                contentDescription = "PDF Page ${pageIdx + 1}",
-                                contentScale = ContentScale.FillWidth,
-                                colorFilter = if (invertColors) invertColorFilter else null,
-                                modifier = Modifier.fillMaxWidth()
+                            Text(
+                                text = "Page ${pageIdx + 1} / $pageCount",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF4F5552),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             )
                         }
-                        Text(
-                            text = "Page ${pageIdx + 1} / $pageCount",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF4F5552),
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                        )
+                    }
+                }
+            }
+
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = ext.surfaceHigh,
+                border = BorderStroke(1.dp, ext.cardBorder),
+                shadowElevation = 6.dp,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 16.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    IconButton(
+                        onClick = {
+                            scope.launch {
+                                listState.animateScrollToItem((currentPage - 2).coerceAtLeast(0))
+                            }
+                        },
+                        enabled = currentPage > 1
+                    ) {
+                        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, contentDescription = "Previous page")
+                    }
+                    Text(
+                        text = "$currentPage / $pageCount",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        modifier = Modifier
+                            .clickable {
+                                jumpTarget = currentPage.toFloat()
+                                showJumpDialog = true
+                            }
+                            .padding(horizontal = 10.dp, vertical = 8.dp)
+                    )
+                    IconButton(
+                        onClick = {
+                            scope.launch {
+                                listState.animateScrollToItem(currentPage.coerceAtMost(pageCount - 1))
+                            }
+                        },
+                        enabled = currentPage < pageCount
+                    ) {
+                        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = "Next page")
                     }
                 }
             }
         }
+    }
+
+    if (showJumpDialog && pageCount > 0) {
+        AlertDialog(
+            onDismissRequest = { showJumpDialog = false },
+            title = { Text("Go to page") },
+            text = {
+                Column {
+                    Text(
+                        text = "Page ${jumpTarget.roundToInt()} of $pageCount",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Slider(
+                        value = jumpTarget,
+                        onValueChange = { jumpTarget = it },
+                        valueRange = 1f..pageCount.toFloat(),
+                        steps = (pageCount - 2).coerceAtLeast(0)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val target = jumpTarget.roundToInt().coerceIn(1, pageCount) - 1
+                    scope.launch { listState.animateScrollToItem(target) }
+                    showJumpDialog = false
+                }) { Text("Go") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showJumpDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 
@@ -840,6 +945,15 @@ private fun BuiltInWordViewer(blocks: List<WordBlock>) {
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp, vertical = 8.dp)
         )
+        if (searchQuery.isNotBlank()) {
+            Text(
+                text = if (filtered.isEmpty()) "No matches in this document"
+                else "${filtered.size} matching block${if (filtered.size == 1) "" else "s"} of ${blocks.size}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 18.dp).padding(bottom = 4.dp)
+            )
+        }
         SelectionContainer {
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -1273,7 +1387,9 @@ private fun BuiltInMarkdownViewer(blocks: List<MarkdownBlock>, rawText: String) 
         }
 
         if (showRaw) {
-            BuiltInPlainTextViewer(rawText)
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                BuiltInPlainTextViewer(rawText)
+            }
         } else {
             SelectionContainer {
                 LazyColumn(
@@ -1432,25 +1548,70 @@ private fun renderInlineMarkdown(text: String, accentColor: Color): AnnotatedStr
 
 @Composable
 private fun BuiltInPlainTextViewer(rawText: String) {
+    val ext = LocalRitamExtendedColors.current
+    var fontSizeSp by remember { mutableIntStateOf(12) }
     val vScroll = rememberScrollState()
     val hScroll = rememberScrollState()
-    SelectionContainer {
-        Box(
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
             modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(vScroll)
-                .horizontalScroll(hScroll)
-                .padding(14.dp)
+                .fillMaxWidth()
+                .background(ext.surfaceLow)
+                .padding(horizontal = 12.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = rawText.ifBlank { "(empty file)" },
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontFamily = JetBrainsMonoFontFamily,
-                    fontSize = 12.sp,
-                    lineHeight = 18.sp
-                ),
+                text = "TEXT SIZE",
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(
+                onClick = { fontSizeSp = (fontSizeSp - 1).coerceAtLeast(9) },
+                enabled = fontSizeSp > 9,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(Icons.Rounded.ZoomOut, contentDescription = "Smaller text", modifier = Modifier.size(18.dp))
+            }
+            Text(
+                text = "$fontSizeSp sp",
+                style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
                 color = MaterialTheme.colorScheme.onSurface
             )
+            IconButton(
+                onClick = { fontSizeSp = (fontSizeSp + 1).coerceAtMost(24) },
+                enabled = fontSizeSp < 24,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(Icons.Rounded.ZoomIn, contentDescription = "Larger text", modifier = Modifier.size(18.dp))
+            }
+            IconButton(
+                onClick = { fontSizeSp = 12 },
+                enabled = fontSizeSp != 12,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(Icons.Rounded.Refresh, contentDescription = "Reset text size", modifier = Modifier.size(18.dp))
+            }
+        }
+        SelectionContainer {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(vScroll)
+                    .horizontalScroll(hScroll)
+                    .padding(14.dp)
+            ) {
+                Text(
+                    text = rawText.ifBlank { "(empty file)" },
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontFamily = JetBrainsMonoFontFamily,
+                        fontSize = fontSizeSp.sp,
+                        lineHeight = (fontSizeSp + 6).sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
         }
     }
 }

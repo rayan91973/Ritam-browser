@@ -7,7 +7,14 @@ import com.example.services.TranslationHelper
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+// Some cases here exercise Android-backed helpers (XmlPullParser, android.net.Uri), so they need a
+// Robolectric sandbox instead of the bare JVM. SDK 34 keeps the suite runnable on JDK 17.
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class ExampleUnitTest {
     @Test
     fun downloadCategoryClassification_worksForCommonFiles() {
@@ -134,9 +141,9 @@ class ExampleUnitTest {
     fun quickControlUsageSorter_placesMostUsedControlsFirst() {
         val original = listOf("find", "translate", "downloads", "devtools", "open_file")
         val usageMap = mapOf(
-            "devtools" to com.example.data.local.QuickControlUsageEntity("devtools", usageCount = 9, lastUsedAt = 100L),
-            "open_file" to com.example.data.local.QuickControlUsageEntity("open_file", usageCount = 4, lastUsedAt = 200L),
-            "find" to com.example.data.local.QuickControlUsageEntity("find", usageCount = 9, lastUsedAt = 300L)
+            "devtools" to com.example.data.local.QuickControlUsageEntity(controlId = "devtools", usageCount = 9, lastUsedAt = 100L),
+            "open_file" to com.example.data.local.QuickControlUsageEntity(controlId = "open_file", usageCount = 4, lastUsedAt = 200L),
+            "find" to com.example.data.local.QuickControlUsageEntity(controlId = "find", usageCount = 9, lastUsedAt = 300L)
         )
         val sorted = com.example.browser.QuickControlUsageSorter.sortByUsage(original, { it }, usageMap)
         assertEquals(listOf("find", "devtools", "open_file", "translate", "downloads"), sorted)

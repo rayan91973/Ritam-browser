@@ -26,9 +26,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -140,6 +143,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Returning to the foreground: stop auto-resuming media so the user's own pause wins.
+        viewModel.webViewManager.setBackgroundMode(false)
+    }
+
     override fun onResume() {
         super.onResume()
         viewModel.webViewManager.resumeAllLiveWebViews()
@@ -164,6 +173,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        // Keep video/audio playing when the user switches apps. The foreground media service is
+        // already running from the JS media-state bridge; this also installs the page watchdog.
+        val tab = viewModel.activeTab.value
+        if (tab.isPlayingMedia || tab.hasActiveMedia) {
+            viewModel.webViewManager.setBackgroundMode(true)
+        }
         viewModel.relockSensitiveAreas()
         if (isFinishing) {
             viewModel.wipeOnExitIfEnabled()
@@ -325,6 +340,7 @@ private fun RitamAppRoot(
     val localStoragePairs by viewModel.localStoragePairs.collectAsStateWithLifecycle()
     val devEvalOutput by viewModel.devEvalOutput.collectAsStateWithLifecycle()
     val externalAppRequest by viewModel.externalAppRequest.collectAsStateWithLifecycle()
+    val adultBlockNotice by viewModel.adultBlockNotice.collectAsStateWithLifecycle()
     val longPressContext by viewModel.longPressContext.collectAsStateWithLifecycle()
     val qrShareUrl by viewModel.qrShareUrl.collectAsStateWithLifecycle()
     val translateDialogOpen by viewModel.translateDialogOpen.collectAsStateWithLifecycle()
@@ -876,6 +892,26 @@ private fun RitamAppRoot(
                 onCopyClean = { url -> viewModel.copyToClipboard(context, url, "Clean URL") },
                 onShareQr = { url -> viewModel.showQrForCurrentOrUrl(url) },
                 onDismiss = { viewModel.dismissLongPressContext() }
+            )
+        }
+
+        adultBlockNotice?.let { notice ->
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissAdultBlockNotice() },
+                title = { Text("Content not allowed") },
+                text = {
+                    Text(
+                        "This content is not allowed on our platform.\n\n" +
+                            "Pornographic and nude material is blocked for everyone's safety, and the " +
+                            "request was stopped before anything was loaded.\n\n" +
+                            "Try a different search if you were looking for something else."
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.dismissAdultBlockNotice() }) {
+                        Text("OK")
+                    }
+                }
             )
         }
 

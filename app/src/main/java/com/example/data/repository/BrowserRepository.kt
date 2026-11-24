@@ -33,6 +33,8 @@ import com.example.data.local.WatchlistDao
 import com.example.data.local.WatchlistItemEntity
 import com.example.data.local.WebsiteSettingsDao
 import com.example.data.local.WebsiteSettingsEntity
+import com.example.data.importer.BrowserDataImporter
+import com.example.data.importer.BrowserImportSummary
 import com.example.services.CryptoVaultHelper
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -236,75 +238,47 @@ class BrowserRepository(
         return count
     }
 
-    suspend fun importBrowserData(rawContent: String): Int {
-        val trimmed = rawContent.trim()
-        if (trimmed.startsWith("<")) {
-            return importBookmarksFromHtml(trimmed)
-        } else if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-            return runCatching {
-                if (trimmed.startsWith("[")) {
-                    val arr = JSONArray(trimmed)
-                    var count = 0
-                    for (i in 0 until arr.length()) {
-                        val obj = arr.optJSONObject(i) ?: continue
-                        val url = obj.optString("url").ifBlank { obj.optString("uri") }
-                        val title = obj.optString("title").ifBlank { obj.optString("name") }
-                        if (url.startsWith("http")) {
-                            addBookmark(url = url, title = title.ifBlank { url })
-                            count++
-                        }
-                    }
-                    count
-                } else {
-                    val root = JSONObject(trimmed)
-                    var count = 0
-                    val roots = root.optJSONObject("roots")
-                    if (roots != null) {
-                        val keys = listOf("bookmark_bar", "other", "synced")
-                        keys.forEach { key ->
-                            val folder = roots.optJSONObject(key)
-                            if (folder != null) {
-                                count += parseChromeBookmarkNode(folder)
-                            }
-                        }
-                    } else if (root.has("bookmarks")) {
-                        return importConfigBackupJson(trimmed)
-                    } else {
-                        val url = root.optString("url")
-                        val title = root.optString("title")
-                        if (url.startsWith("http")) {
-                            addBookmark(url = url, title = title.ifBlank { url })
-                            count++
-                        }
-                    }
-                    count
-                }
-            }.getOrDefault(0)
-        }
-        return 0
-    }
+    /**
+     * Imports bookmarks from another browser's export file (HTML or JSON), keeping folder names and
+     * skipping URLs that are already in the library. History cannot be read from those exports, so
+     * only bookmarks/folders are reported.
+     */
+    suspend fun importBrowserData(rawContent: String): BrowserImportSummary {
+        val parsed = BrowserDataImporter.parse(rawContent)
+        val existingUrls = bookmarkDao.getAllOnce().mapTo(HashSet()) { it.url.lowercase() }
+        val foldersByName = bookmarkDao.getAllFoldersOnce()
+            .associateByTo(HashMap()) { it.name.lowercase() }
+        var added = 0
+        var skipped = parsed.skippedEntries
+        var foldersCreated = 0
 
-    private suspend fun parseChromeBookmarkNode(node: JSONObject): Int {
-        var count = 0
-        val type = node.optString("type")
-        if (type == "url") {
-            val url = node.optString("url")
-            val name = node.optString("name").ifBlank { node.optString("title") }
-            if (url.startsWith("http")) {
-                addBookmark(url = url, title = name.ifBlank { url })
-                count++
+        for (item in parsed.bookmarks) {
+            val key = item.url.lowercase()
+            if (!existingUrls.add(key)) {
+                skipped++
+                continue
             }
-        }
-        val children = node.optJSONArray("children")
-        if (children != null) {
-            for (i in 0 until children.length()) {
-                val child = children.optJSONObject(i)
-                if (child != null) {
-                    count += parseChromeBookmarkNode(child)
+            var folderId = 1L
+            val folderName = item.folder?.trim().orEmpty()
+            if (folderName.isNotEmpty()) {
+                val folderKey = folderName.lowercase()
+                folderId = foldersByName[folderKey]?.id ?: run {
+                    val created = BookmarkFolderEntity(name = folderName)
+                    val id = bookmarkDao.insertFolder(created)
+                    foldersByName[folderKey] = created.copy(id = id)
+                    foldersCreated++
+                    id
                 }
             }
+            addBookmark(url = item.url, title = item.title, folderId = folderId)
+            added++
         }
-        return count
+        return BrowserImportSummary(
+            sourceLabel = parsed.sourceLabel,
+            bookmarksAdded = added,
+            bookmarksSkipped = skipped,
+            foldersCreated = foldersCreated
+        )
     }
 
     suspend fun exportHistoryAsMarkdown(): String {

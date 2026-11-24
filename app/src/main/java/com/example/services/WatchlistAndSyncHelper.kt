@@ -1,14 +1,14 @@
 package com.example.services
 
+import com.example.core.RitamHttp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 object WatchlistAndSyncHelper {
-    private val client = OkHttpClient.Builder()
+    private val client = RitamHttp.builder()
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
         .followRedirects(true)
