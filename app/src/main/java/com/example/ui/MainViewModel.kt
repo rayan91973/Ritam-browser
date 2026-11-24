@@ -2098,16 +2098,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         if (candidate != null) {
             _splitTabId.value = candidate.id
-            showMessage("Split View: ${candidate.title}")
+            showMessage("Parallel Split View: ${candidate.title}")
         } else {
+            val activeTabVal = activeTab.value
+            val initialUrl = if (activeTabVal.url.isNotBlank() && !activeTabVal.isHome) activeTabVal.url else "https://duckduckgo.com"
             val second = TabState(
-                title = "Split Pane",
-                isDesktopMode = preferences.value.defaultDesktopMode
+                url = initialUrl,
+                domain = extractHost(initialUrl),
+                title = extractHost(initialUrl).ifBlank { "Parallel Tab" },
+                isDesktopMode = preferences.value.defaultDesktopMode,
+                sslSecure = initialUrl.startsWith("https://", ignoreCase = true),
+                isLoading = true,
+                progress = 10
             )
             webViewManager.setDesktopMode(second.id, second.isDesktopMode, reloadIfLoaded = false)
+            webViewManager.setTabZoom(second.id, shieldsEngine.getZoomForDomain(second.domain))
             _tabs.update { it + second }
             _splitTabId.value = second.id
-            showMessage("Opened Split View pane")
+            webViewManager.loadUrl(second.id, initialUrl)
+            showMessage("Opened Parallel Split View")
         }
     }
 

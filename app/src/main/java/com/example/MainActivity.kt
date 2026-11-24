@@ -466,6 +466,7 @@ private fun RitamAppRoot(
                 onSelectSearchEngine = { viewModel.updateSearchEngine(it) },
                 onCopyAddress = { url -> viewModel.copyToClipboard(context, url, "Address") },
                 onNavigateInput = { viewModel.navigateToInput(it) },
+                onNavigateTab = { tabId, url -> viewModel.navigateToInputOnTab(tabId, url) },
                 onOpenSanctuaryEssay = { viewModel.openSanctuaryEssay() },
                 onBack = { viewModel.goBack() },
                 onForward = { viewModel.goForward() },

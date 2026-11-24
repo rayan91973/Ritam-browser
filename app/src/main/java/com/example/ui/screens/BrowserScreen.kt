@@ -37,6 +37,8 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
@@ -60,6 +62,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -127,6 +130,7 @@ fun BrowserScreen(
     onSelectSearchEngine: (SearchEngine) -> Unit,
     onCopyAddress: (String) -> Unit,
     onNavigateInput: (String) -> Unit,
+    onNavigateTab: (String, String) -> Unit = { _, _ -> },
     onOpenSanctuaryEssay: () -> Unit,
     onBack: () -> Boolean,
     onForward: () -> Unit,
@@ -277,7 +281,10 @@ fun BrowserScreen(
                                         onFocusPane = onSelectSplitPaneFocus,
                                         onSwap = onSwapSplitPanes,
                                         onClose = onCloseSplitPane,
-                                        onOpenJump = onOpenCommandPalette
+                                        onNavigateUrl = onNavigateTab,
+                                        onGoBack = { webViewManager.goBack(it) },
+                                        onGoForward = { webViewManager.goForward(it) },
+                                        onReload = { webViewManager.reload(it) }
                                     )
                                 }
                             }
@@ -302,7 +309,10 @@ fun BrowserScreen(
                                         onFocusPane = onSelectSplitPaneFocus,
                                         onSwap = onSwapSplitPanes,
                                         onClose = onCloseSplitPane,
-                                        onOpenJump = onOpenCommandPalette
+                                        onNavigateUrl = onNavigateTab,
+                                        onGoBack = { webViewManager.goBack(it) },
+                                        onGoForward = { webViewManager.goForward(it) },
+                                        onReload = { webViewManager.reload(it) }
                                     )
                                 }
                             }
@@ -820,75 +830,115 @@ private fun SplitSecondaryPane(
     onFocusPane: () -> Unit,
     onSwap: () -> Unit,
     onClose: () -> Unit,
-    onOpenJump: () -> Unit
+    onNavigateUrl: (String, String) -> Unit,
+    onGoBack: (String) -> Unit,
+    onGoForward: (String) -> Unit,
+    onReload: (String) -> Unit
 ) {
     val ext = LocalRitamExtendedColors.current
+    var urlInput by remember(splitTab.url) { mutableStateOf(splitTab.url) }
+    var isEditingUrl by remember { mutableStateOf(false) }
+
     Column(modifier = Modifier.fillMaxSize()) {
         Surface(
             color = ext.surfaceLow,
             border = BorderStroke(0.5.dp, ext.cardBorder),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onFocusPane)
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = if (splitTab.isHome) "Split Pane • Tap Jump" else splitTab.domain.ifBlank { splitTab.title },
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = onFocusPane) {
-                        Text("Focus", style = MaterialTheme.typography.labelSmall)
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        IconButton(
+                            onClick = { onGoBack(splitTab.id) },
+                            enabled = splitTab.canGoBack,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", modifier = Modifier.size(16.dp))
+                        }
+                        IconButton(
+                            onClick = { onGoForward(splitTab.id) },
+                            enabled = splitTab.canGoForward,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = "Forward", modifier = Modifier.size(16.dp))
+                        }
+                        IconButton(
+                            onClick = { onReload(splitTab.id) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Rounded.Refresh, contentDescription = "Reload", modifier = Modifier.size(16.dp))
+                        }
+                        Spacer(Modifier.width(2.dp))
+                        if (isEditingUrl) {
+                            OutlinedTextField(
+                                value = urlInput,
+                                onValueChange = { urlInput = it },
+                                singleLine = true,
+                                textStyle = MaterialTheme.typography.bodySmall,
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(vertical = 2.dp),
+                                trailingIcon = {
+                                    IconButton(
+                                        onClick = {
+                                            if (urlInput.isNotBlank()) {
+                                                onNavigateUrl(splitTab.id, urlInput)
+                                                isEditingUrl = false
+                                            }
+                                        },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(Icons.Rounded.Search, contentDescription = "Go", modifier = Modifier.size(14.dp))
+                                    }
+                                }
+                            )
+                        } else {
+                            Surface(
+                                onClick = { isEditingUrl = true },
+                                shape = RoundedCornerShape(8.dp),
+                                color = ext.surfaceContainer,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = splitTab.domain.ifBlank { splitTab.title.ifBlank { splitTab.url } },
+                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
                     }
-                    IconButton(onClick = onSwap, modifier = Modifier.size(34.dp)) {
-                        Icon(Icons.Rounded.SwapHoriz, contentDescription = "Swap panes", modifier = Modifier.size(16.dp))
-                    }
-                    IconButton(onClick = onClose, modifier = Modifier.size(34.dp)) {
-                        Icon(Icons.Rounded.Close, contentDescription = "Close split view", modifier = Modifier.size(16.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = onSwap, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Rounded.SwapHoriz, contentDescription = "Swap panes", modifier = Modifier.size(16.dp))
+                        }
+                        IconButton(onClick = onClose, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Rounded.Close, contentDescription = "Close split view", modifier = Modifier.size(16.dp))
+                        }
                     }
                 }
             }
         }
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            if (splitTab.isHome) {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(20.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "Secondary Split Pane Ready",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = "Open a page from Command Palette or tap Focus to browse here.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedButton(onClick = onOpenJump) {
-                        Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Command Palette")
-                    }
-                }
-            } else {
-                WebViewPaneContent(
-                    tab = splitTab,
-                    preferences = preferences,
-                    webViewManager = webViewManager
-                )
-            }
+            WebViewPaneContent(
+                tab = splitTab,
+                preferences = preferences,
+                webViewManager = webViewManager
+            )
         }
     }
 }
